@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -484,11 +486,12 @@ fun KoastyHost(
             Modifier
         }
 
-    /*
-     * Slide from above the screen.
-     */
+    val entersFromTop = config.position == KoastPosition.TOP_START ||
+        config.position == KoastPosition.TOP_CENTER ||
+        config.position == KoastPosition.TOP_END
+
     val entranceY =
-        -hiddenDistancePx *
+        (if (entersFromTop) -hiddenDistancePx else hiddenDistancePx) *
                 (1f - visibilityProgress.value)
 
     val finalAlpha =
@@ -497,9 +500,12 @@ fun KoastyHost(
                         gestureAlpha
                 ).coerceIn(0f, 1f)
 
-    Surface(
+    Box(
         modifier = modifier
-            .fillMaxWidth()
+            .then(
+                if (config.compact) Modifier.widthIn(max = config.maxWidth)
+                else Modifier.fillMaxWidth()
+            )
             .zIndex(1000f)
             .graphicsLayer {
                 translationX = dragX
@@ -510,44 +516,54 @@ fun KoastyHost(
                 measuredSize = it
             }
             .then(gestureModifier)
-            .then(clickableModifier),
-        color = config.containerColor,
-        contentColor = config.contentColor,
-        shape = config.shape,
-        shadowElevation = config.shadowElevation
+            .then(clickableModifier)
     ) {
-        Box(
+        Surface(
             modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(
-                    min = config.minHeight
-                )
-                .padding(
-                    config.contentPadding
+                .then(
+                    if (config.compact) Modifier.widthIn(max = config.maxWidth)
+                    else Modifier.fillMaxWidth()
                 ),
-            contentAlignment = Alignment.CenterStart
+            color = config.containerColor,
+            contentColor = config.contentColor,
+            shape = config.shape,
+            shadowElevation = config.shadowElevation
         ) {
-            if (koastContent != null) {
-                koastContent(koast)
-            } else {
-                DefaultKoastContent(
-                    koast = koast,
-                    config = config,
-                    leadingContent = leadingContent
-                )
+            Box(
+                modifier = Modifier
+                    .then(
+                        if (config.compact) Modifier.widthIn(max = config.maxWidth)
+                        else Modifier.fillMaxWidth()
+                    )
+                    .heightIn(min = config.minHeight)
+                    .padding(config.contentPadding),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                if (koastContent != null) {
+                    koastContent(koast)
+                } else {
+                    DefaultKoastContent(
+                        koast = koast,
+                        config = config,
+                        leadingContent = leadingContent
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun DefaultKoastContent(
+fun DefaultKoastContent(
     koast: KoastRequest,
     config: KoastyHostConfig,
-    leadingContent: (@Composable RowScope.(KoastRequest) -> Unit)?
+    leadingContent: (@Composable RowScope.(KoastRequest) -> Unit)?,
+    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier
+            .statusBarsPadding()
+            .fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (leadingContent != null) {

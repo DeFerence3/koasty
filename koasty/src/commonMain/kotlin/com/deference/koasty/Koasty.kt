@@ -42,17 +42,23 @@ enum class KoastPosition {
     BOTTOM_END,
 }
 
-private fun defaultKoastPosition(): KoastPosition = when (getPlatform().platform) {
+internal fun defaultKoastPosition(): KoastPosition = when (getPlatform().platform) {
     Platforms.DESKTOP, Platforms.WEB -> KoastPosition.BOTTOM_END
     Platforms.ANDROID, Platforms.IOS -> KoastPosition.TOP_CENTER
 }
 
+internal fun defaultCompactKoastLayout(): Boolean = when (getPlatform().platform) {
+    Platforms.DESKTOP, Platforms.WEB -> true
+    Platforms.ANDROID, Platforms.IOS -> false
+}
+
+/*
 @Composable
 fun TopKoast(
     visible: Boolean,
     title: String,
     message: String,
-    icon: ImageVector,
+    icon: ImageVector? = null,
     modifier: Modifier = Modifier,
     backgroundColor: Color = MaterialTheme.colorScheme.background,
     durationMillis: Long = 3000,
@@ -62,9 +68,7 @@ fun TopKoast(
     val isTopPosition = position == KoastPosition.TOP_START ||
         position == KoastPosition.TOP_CENTER ||
         position == KoastPosition.TOP_END
-    val useCompactLayout = position != KoastPosition.TOP_CENTER ||
-        getPlatform().platform == Platforms.DESKTOP ||
-        getPlatform().platform == Platforms.WEB
+    val useCompactLayout = position != KoastPosition.TOP_CENTER || defaultCompactKoastLayout()
     val contentAlignment = when (position) {
         KoastPosition.TOP_START -> Alignment.TopStart
         KoastPosition.TOP_CENTER -> Alignment.TopCenter
@@ -110,14 +114,15 @@ fun TopKoast(
                     ),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(32.dp)
-                )
-
-                Spacer(Modifier.width(22.dp))
+                icon?.let{
+                    Icon(
+                        imageVector = it,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Spacer(Modifier.width(22.dp))
+                }
 
                 Column {
                     Text(
@@ -139,3 +144,4 @@ fun TopKoast(
         }
     }
 }
+*/

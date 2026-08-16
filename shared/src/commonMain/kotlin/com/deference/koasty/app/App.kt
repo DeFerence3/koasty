@@ -42,8 +42,10 @@ fun App() {
                     ) {
                         Button(onClick = {
                             koastManager.show(
-                                "Test",
-                                "Testing Koasty"
+                                "Alert",
+                                "The alert scales to accommodate larger bodies of text. " +
+                                        "The alert scales to accommodate larger bodies of text. " +
+                                        "The alert scales to accommodate larger bodies of text."
                             )
                         }) {
                             Text("Click me!")
