@@ -4,6 +4,7 @@
 
 [![Kotlin](https://img.shields.io/badge/Kotlin-Multiplatform-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/docs/multiplatform.html)
 [![Compose Multiplatform](https://img.shields.io/badge/Compose-Multiplatform-4285F4?logo=jetpackcompose&logoColor=white)](https://www.jetbrains.com/compose-multiplatform/)
+[![Klib](https://img.shields.io/maven-central/v/io.github.deference3/koasty?label=Klib)](https://klibs.io/project/DeFerence3/koasty)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
 Koasty gives Compose Multiplatform applications a shared notification API across Android, iOS, desktop, and web. Show a short message from common code, let Koasty handle its lifetime and dismissal, and customize the visuals when your product needs a distinct style.
