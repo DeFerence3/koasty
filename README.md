@@ -16,6 +16,7 @@ Koasty gives Compose Multiplatform applications a shared notification API across
 
 - One Compose API for Android, iOS, JVM desktop, JavaScript, and Wasm.
 - Timed, persistent, dismissible, and clickable notifications.
+- First-in, first-out queue, shown one at a time or stacked like cards.
 - Swipe-to-dismiss gestures and animated transitions.
 - Custom colors, typography, shape, padding, elevation, and animation specs.
 - Slots for a leading icon or a completely custom notification layout.
@@ -129,6 +130,45 @@ koastManager.showClickable(
     onClick = { openReleaseNotes() }
 )
 ```
+
+## Queueing
+
+Koasts never replace each other. Each call to `show` (or any other `show*` method) adds a koast to the back of a first-in, first-out queue. The koast at the front is the only one that counts down its duration and responds to swipes and clicks. When it is dismissed, the next koast takes its place.
+
+```kotlin
+koastManager.show("Uploading", "1 of 3")
+koastManager.show("Uploading", "2 of 3")   // waits for the first
+koastManager.show("Uploading", "3 of 3")   // waits for the second
+
+koastManager.dismiss()        // dismiss the koast in front
+koastManager.dismiss(id)      // dismiss a specific koast, even one still queued
+koastManager.dismissAll()     // clear the front koast and the whole queue
+
+koastManager.queue            // pending koasts, front first
+```
+
+Every `show*` method returns the koast's id. A persistent or until-dismissed koast keeps everything behind it waiting until you dismiss it.
+
+### Stacked cards
+
+By default the host shows one koast at a time (`KoastDisplayMode.Sequential`). To layer queued koasts behind the front one like a deck of cards, use `KoastDisplayMode.Stacked`:
+
+```kotlin
+KoastyProvider(
+    koastManager = koastManager,
+    config = KoastyHostConfig(
+        displayMode = KoastDisplayMode.Stacked(
+            maxVisible = 3,       // cards drawn, including the front one
+            peekOffset = 10.dp,   // how far each card peeks out behind
+            scaleStep = 0.05f     // how much smaller each card behind is
+        )
+    )
+) {
+    AppContent()
+}
+```
+
+The queue order is the same in both modes. The front card is the oldest koast. When it leaves, the next card moves forward and the next queued koast joins at the back.
 
 ## Customize the host
 

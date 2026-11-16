@@ -13,15 +13,19 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.deference.koasty.KoastDisplayMode
 import com.deference.koasty.KoastManager
 import com.deference.koasty.KoastPosition
 import com.deference.koasty.KoastRequest
 import com.deference.koasty.KoastyHostConfig
 import kotlin.time.Duration.Companion.seconds
 
-internal enum class SampleStyle { Default, CustomConfig, Leading, CustomLayout }
+internal enum class SampleStyle { Default, Stacked, CustomConfig, Leading, CustomLayout }
 
 internal fun sampleConfig(style: SampleStyle): KoastyHostConfig = when (style) {
+	SampleStyle.Stacked -> KoastyHostConfig(
+		displayMode = KoastDisplayMode.Stacked(maxVisible = 3),
+	)
 	SampleStyle.CustomConfig -> KoastyHostConfig(
 		position = KoastPosition.TOP_CENTER,
 		compact = true,
@@ -34,6 +38,7 @@ internal fun sampleConfig(style: SampleStyle): KoastyHostConfig = when (style) {
 		messageStyle = TextStyle(fontSize = 13.sp),
 		horizontalSwipeEnabled = true,
 		swipeUpEnabled = false,
+		displayMode = KoastDisplayMode.Stacked(maxVisible = 3),
 		enterAnimationSpec = tween(400),
 		exitAnimationSpec = tween(400),
 	)
@@ -107,13 +112,24 @@ internal fun getSamples(
 			onClick = {}
 		)
 	},
-	"Replace Koast" to {
-		koastManager.show("First", "Replaced by second koast")
-		koastManager.show("Second", "Newest koast wins")
+	"Queue Koasts" to {
+		koastManager.show("First", "Shown first")
+		koastManager.show("Second", "Waits until the first is gone")
+		koastManager.show("Third", "First in, first out")
+	},
+	"Dismiss All" to {
+		koastManager.dismissAll()
 	},
 	"Default Style" to {
 		setStyle(SampleStyle.Default)
 		koastManager.show("Default", "Default host config")
+	},
+	"Stacked Style" to {
+		setStyle(SampleStyle.Stacked)
+		koastManager.show("Stacked", "Queued koasts stack like cards")
+		koastManager.show("Next up", "Moves forward when the front one leaves")
+		koastManager.show("Third", "Last visible card")
+		koastManager.show("Fourth", "Waits off-screen until there is room")
 	},
 	"Custom Config" to {
 		setStyle(SampleStyle.CustomConfig)

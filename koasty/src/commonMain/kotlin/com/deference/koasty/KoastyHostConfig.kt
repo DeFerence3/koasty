@@ -20,6 +20,12 @@ data class KoastyHostConfig(
     val compact: Boolean = defaultCompactKoastLayout(),
     val maxWidth: Dp = 448.dp,
     val edgePadding: Dp = 16.dp,
+
+    /**
+     * How queued koasts are presented: one at a time, or stacked
+     * behind the front koast like cards.
+     */
+    val displayMode: KoastDisplayMode = KoastDisplayMode.Sequential,
     val showCompactDismissButton: Boolean = true,
     val dismissButtonContainerColor: Color = Color(0xFFFFF1F1),
     val dismissButtonContentColor: Color = Color(0xFFE53935),

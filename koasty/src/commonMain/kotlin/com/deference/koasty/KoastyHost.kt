@@ -2,6 +2,8 @@ package com.deference.koasty
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
@@ -10,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -18,31 +21,55 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.max
+
+/**
+ * A koast the host is drawing. It stays drawn while it animates out,
+ * after the manager has already removed it from the queue.
+ */
+@Stable
+private class KoastEntry(val koast: KoastRequest) {
+    var exiting by mutableStateOf(false)
+
+    // Stack position the koast had when it started leaving.
+    var exitIndex by mutableIntStateOf(0)
+}
 
 @Composable
 fun KoastyHost(
@@ -53,28 +80,76 @@ fun KoastyHost(
     koastContent: (@Composable (KoastRequest) -> Unit)? = null
 ) {
     val managerState by koastManager.state.collectAsState()
-    val current = managerState.current
+    val stacked = config.displayMode as? KoastDisplayMode.Stacked
+    val koasts = managerState.queue.map { KoastEntry(it) }.toMutableStateList()
+    if (koasts.isEmpty()) return
 
     /*
-     * We keep the last koast rendered while it animates out.
-     * Otherwise, setting manager.current = null would remove
-     * the composable instantly.
+     * Cards behind the front one are drawn at the front card's height
+     * so each peeks out by the same amount whatever its own content.
      */
-    var renderedKoast by remember {
-        mutableStateOf<KoastRequest?>(null)
-    }
+    var frontHeightPx by remember { mutableIntStateOf(0) }
 
+    Box(
+        modifier = modifier
+            .then(
+                if (config.compact) Modifier.widthIn(max = config.maxWidth)
+                else Modifier.fillMaxWidth()
+            )
+            .zIndex(1000f),
+        contentAlignment = config.position.toAlignment()
+    ) {
+        var activeIndex = 0
+        koasts.forEach { entry ->
+            val stackIndex = if (entry.exiting) entry.exitIndex else activeIndex++
+            key(entry.koast.id) {
+                KoastCard(
+                    koast = entry.koast,
+                    exiting = entry.exiting,
+                    stackIndex = stackIndex,
+                    stacked = stacked,
+                    frontHeightPx = frontHeightPx,
+                    onFrontHeightChanged = { frontHeightPx = it },
+                    onExited = { koasts.remove(entry) },
+                    koastManager = koastManager,
+                    config = config,
+                    leadingContent = leadingContent,
+                    koastContent = koastContent,
+                    modifier = Modifier.zIndex(
+                        -stackIndex.toFloat() + if (entry.exiting) 0.5f else 0f
+                    )
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun KoastCard(
+    koast: KoastRequest,
+    exiting: Boolean,
+    stackIndex: Int,
+    stacked: KoastDisplayMode.Stacked?,
+    frontHeightPx: Int,
+    onFrontHeightChanged: (Int) -> Unit,
+    onExited: () -> Unit,
+    koastManager: KoastManager,
+    config: KoastyHostConfig,
+    leadingContent: (@Composable RowScope.(KoastRequest) -> Unit)?,
+    koastContent: (@Composable (KoastRequest) -> Unit)?,
+    modifier: Modifier = Modifier
+) {
     var measuredSize by remember {
         mutableStateOf(IntSize.Zero)
     }
 
     /*
-     * 0 = above the screen
+     * 0 = outside the screen edge
      * 1 = normal visible position
      */
-    val visibilityProgress = remember {
-        Animatable(0f)
-    }
+    val visibilityProgress = remember { Animatable(0f) }
+
+    var entered by remember { mutableStateOf(false) }
 
     var hiddenDistancePx by remember {
         mutableFloatStateOf(1f)
@@ -100,82 +175,67 @@ fun KoastyHost(
     }
 
     val coroutineScope = rememberCoroutineScope()
+    val currentOnExited by rememberUpdatedState(onExited)
 
     /*
-     * Handles:
-     * - a new koast
-     * - automatic timeout
-     * - programmatic dismissal
+     * Only the front koast counts down, takes input and
+     * decides the height of the cards behind it.
      */
-    LaunchedEffect(current?.id) {
-        gestureJob?.cancel()
+    val isFront = stackIndex == 0 && !exiting
 
-        val incoming = current
+    LaunchedEffect(Unit) {
+        /*
+         * Give the koast one frame to measure itself.
+         * That way it starts fully outside the screen even
+         * when custom content changes its height.
+         */
+        withFrameNanos { }
 
-        if (incoming != null) {
+        hiddenDistancePx = max(
+            measuredSize.height.toFloat(),
+            1f
+        )
 
-            renderedKoast = incoming
+        visibilityProgress.animateTo(
+            targetValue = 1f,
+            animationSpec = config.enterAnimationSpec
+        )
 
-            dragX = 0f
-            dragY = 0f
-            gestureAlpha = 1f
+        entered = true
+    }
 
-            visibilityProgress.snapTo(0f)
+    LaunchedEffect(exiting) {
+        if (!exiting) return@LaunchedEffect
 
-            /*
-             * Give the koast one frame to measure itself.
-             * That way it starts fully above the screen even
-             * when custom content changes its height.
-             */
-            withFrameNanos { }
-
-            hiddenDistancePx = max(
-                measuredSize.height.toFloat(),
-                1f
-            )
-
-            visibilityProgress.animateTo(
-                targetValue = 1f,
-                animationSpec = config.enterAnimationSpec
-            )
-
-            when (val lifetime = incoming.lifetime) {
-                is KoastLifetime.Timed -> {
-                    delay(lifetime.millis)
-
-                    koastManager.dismiss(
-                        id = incoming.id
-                    )
-                }
-
-                KoastLifetime.UntilDismissed -> {
-                    // Stay visible forever.
-                }
-            }
-
-        } else if (renderedKoast != null) {
-
+        /*
+         * A swiped-away koast is already invisible, so there is
+         * no need to keep the next one waiting for another animation.
+         */
+        if (gestureAlpha > 0.01f) {
             visibilityProgress.animateTo(
                 targetValue = 0f,
                 animationSpec = config.exitAnimationSpec
             )
+        }
 
-            renderedKoast = null
+        currentOnExited()
+    }
+    LaunchedEffect(isFront) {
+        if (!isFront) return@LaunchedEffect
+        val lifetime = koast.lifetime as? KoastLifetime.Timed ?: return@LaunchedEffect
 
-            dragX = 0f
-            dragY = 0f
-            gestureAlpha = 1f
+        snapshotFlow { entered }.first { it }
+        delay(lifetime.millis)
+        koastManager.dismiss(koast.id)
+    }
+
+    LaunchedEffect(isFront, measuredSize.height) {
+        if (isFront && measuredSize.height > 0) {
+            onFrontHeightChanged(measuredSize.height)
         }
     }
 
-    val koast = renderedKoast ?: return
-
-    /*
-     * Only the currently-active koast should receive input.
-     * During exit animation it becomes non-interactive.
-     */
-    val interactive =
-        current?.id == koast.id
+    val interactive = isFront
 
     fun settleBack() {
         gestureJob?.cancel()
@@ -486,12 +546,13 @@ fun KoastyHost(
             Modifier
         }
 
-    val entersFromTop = config.position == KoastPosition.TOP_START ||
-        config.position == KoastPosition.TOP_CENTER ||
-        config.position == KoastPosition.TOP_END
+    val entersFromTop = config.position.isTop
+    val enteredAtFront = remember { stackIndex == 0 }
+    val slides = if (exiting) stackIndex == 0 else enteredAtFront
 
     val entranceY =
-        (if (entersFromTop) -hiddenDistancePx else hiddenDistancePx) *
+        if (!slides) 0f
+        else (if (entersFromTop) -hiddenDistancePx else hiddenDistancePx) *
                 (1f - visibilityProgress.value)
 
     val finalAlpha =
@@ -500,16 +561,48 @@ fun KoastyHost(
                         gestureAlpha
                 ).coerceIn(0f, 1f)
 
+    /*
+     * Cards behind the front one shrink a little and peek out on the
+     * side facing away from the screen edge.
+     */
+    val density = LocalDensity.current
+
+    val stackScale by animateFloatAsState(
+        targetValue = if (stacked == null) 1f else (1f - stackIndex * stacked.scaleStep).coerceAtLeast(0f),
+        animationSpec = config.settleAnimationSpec
+    )
+
+    val stackOffsetY by animateFloatAsState(
+        targetValue = if (stacked == null) {
+            0f
+        } else {
+            with(density) { stacked.peekOffset.toPx() } * stackIndex * (if (entersFromTop) 1f else -1f)
+        },
+        animationSpec = config.settleAnimationSpec
+    )
+
+    val behindHeight =
+        if (stacked != null && stackIndex > 0 && frontHeightPx > 0) {
+            with(density) { frontHeightPx.toDp() }
+        } else {
+            null
+        }
+
     Box(
         modifier = modifier
             .then(
                 if (config.compact) Modifier.widthIn(max = config.maxWidth)
                 else Modifier.fillMaxWidth()
             )
-            .zIndex(1000f)
             .graphicsLayer {
+                transformOrigin = TransformOrigin(
+                    pivotFractionX = 0.5f,
+                    pivotFractionY = if (entersFromTop) 1f else 0f
+                )
+                scaleX = stackScale
+                scaleY = stackScale
                 translationX = dragX
-                translationY = entranceY + dragY
+                translationY = entranceY + dragY + stackOffsetY
                 alpha = finalAlpha
             }
             .onSizeChanged {
@@ -523,6 +616,10 @@ fun KoastyHost(
                 .then(
                     if (config.compact) Modifier.widthIn(max = config.maxWidth)
                     else Modifier.fillMaxWidth()
+                )
+                .then(
+                    if (behindHeight != null) Modifier.height(behindHeight)
+                    else Modifier
                 ),
             color = config.containerColor,
             contentColor = config.contentColor,

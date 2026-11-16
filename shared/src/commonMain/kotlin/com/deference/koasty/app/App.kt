@@ -50,27 +50,40 @@ fun App() {
                 modifier = Modifier
                     .safeContentPadding()
             ) { paddingValues ->
-                Box(
+                Column(
                     modifier = Modifier
                         .padding(paddingValues)
-                        .fillMaxSize(),
-                    contentAlignment = Alignment.Center,
                 ) {
-					LazyVerticalGrid(
-						modifier = Modifier
-							.fillMaxWidth(0.6f),
-						verticalArrangement = Arrangement.spacedBy(8.dp),
-						horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-						columns = GridCells.Adaptive(minSize = 128.dp),
-					) {
-						items(samples) {
-							Button(onClick = { it.second() }) {
-								Text(it.first)
-							}
-						}
-					}
+                    Section("Display Mode")
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        LazyVerticalGrid(
+                            modifier = Modifier
+                                .fillMaxWidth(0.6f),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                            columns = GridCells.Adaptive(minSize = 128.dp),
+                        ) {
+                            items(samples) {
+                                Button(onClick = { it.second() }) {
+                                    Text(it.first)
+                                }
+                            }
+                        }
+                    }
+
                 }
             }
         }
     }
+}
+
+@Composable
+private fun Section(
+    title: String
+){
+    Text(title)
 }

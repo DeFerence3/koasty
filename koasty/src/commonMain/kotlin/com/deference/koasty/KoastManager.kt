@@ -21,11 +21,23 @@ class KoastManager {
         get() = currentKoast != null
 
     /**
+     * Every pending koast in FIFO order, starting with [currentKoast].
+     */
+    val queue: List<KoastRequest>
+        get() = _state.value.queue
+
+    /**
      * Normal timed koast.
      *
+     * Koasts are queued first in, first out. If another koast is already
+     * showing, this one waits until every koast queued before it has been
+     * dismissed.
+     *
      * By default,:
-     * - disappears after [duration]
+     * - disappears after [duration] once it reaches the front
      * - can be swiped away
+     *
+     * @return the id of the queued koast, usable with [dismiss].
      */
     fun show(
         title: String,
@@ -158,30 +170,45 @@ class KoastManager {
     }
 
     /**
-     * Dismiss whatever is currently visible.
+     * Dismiss the koast currently in front. The next queued koast,
+     * if any, takes its place.
      */
     fun dismiss() {
-        dismiss(id = null)
+        _state.update { old ->
+            if (old.queue.isEmpty()) old
+            else old.copy(queue = old.queue.drop(1))
+        }
     }
 
     /**
-     * Dismiss only if this exact koast is still visible.
+     * Dismiss the koast with this [id], whether it is in front or still
+     * waiting in the queue.
      *
-     * Useful for timers so an old timeout cannot accidentally
-     * dismiss a newer koast.
+     * Ids of koasts that were already dismissed are ignored, so an old
+     * timeout can never dismiss a newer koast.
+     *
+     * @return true if a koast was removed.
      */
-    internal fun dismiss(id: Long?) {
-        _state.update { old ->
-            val current = old.current
+    fun dismiss(id: Long): Boolean {
+        var removed = false
 
-            if (
-                current == null ||
-                (id != null && current.id != id)
-            ) {
-                old
-            } else {
-                old.copy(current = null)
-            }
+        _state.update { old ->
+            val remaining = old.queue.filterNot { it.id == id }
+            removed = remaining.size != old.queue.size
+
+            if (removed) old.copy(queue = remaining) else old
+        }
+
+        return removed
+    }
+
+    /**
+     * Dismiss the koast in front and clear everything queued behind it.
+     */
+    fun dismissAll() {
+        _state.update { old ->
+            if (old.queue.isEmpty()) old
+            else old.copy(queue = emptyList())
         }
     }
 
@@ -201,7 +228,7 @@ class KoastManager {
 
             KoastManagerState(
                 sequence = id,
-                current = KoastRequest(
+                queue = old.queue + KoastRequest(
                     id = id,
                     title = title,
                     message = message,
