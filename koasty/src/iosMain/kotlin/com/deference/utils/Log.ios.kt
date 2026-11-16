@@ -1,0 +1,5 @@
+package com.deference.utils
+
+internal actual fun logPlatform(level: String, tag: String, message: String) {
+    if (level == "RAW") println("RAW: $message") else println("$level: $tag  $message")
+}
