@@ -20,13 +20,14 @@ import com.deference.koasty.KoastDisplayMode
 import com.deference.koasty.KoastManager
 import com.deference.koasty.KoastPosition
 import com.deference.koasty.KoastRequest
+import com.deference.koasty.KoastStackHandleState
 import com.deference.koasty.KoastyHostConfig
 import kotlin.time.Duration.Companion.seconds
 
-internal enum class SampleStyle { Default, Stacked, CustomConfig, Leading, CustomLayout }
+internal enum class SampleStyle { Default, Stacked, StackedCustomHandle, CustomConfig, Leading, CustomLayout }
 
 internal fun sampleConfig(style: SampleStyle): KoastyHostConfig = when (style) {
-	SampleStyle.Stacked -> KoastyHostConfig(
+	SampleStyle.Stacked, SampleStyle.StackedCustomHandle -> KoastyHostConfig(
 		displayMode = KoastDisplayMode.Stacked(maxVisible = 3),
 	)
 	SampleStyle.CustomConfig -> KoastyHostConfig(
@@ -51,6 +52,15 @@ internal fun sampleConfig(style: SampleStyle): KoastyHostConfig = when (style) {
 @Composable
 internal fun SampleLeading(koast: KoastRequest) {
 	Text("●", modifier = Modifier.padding(end = 12.dp))
+}
+
+@Composable
+internal fun SampleStackHandle(state: KoastStackHandleState) {
+	Text(
+		text = if (state.expanded) "▲ collapse" else "▼ +${state.moreCount}",
+		fontWeight = FontWeight.Bold,
+		modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+	)
 }
 
 @Composable
@@ -140,6 +150,14 @@ internal fun getSamples(
 		koastManager.show("Next up", "Moves forward when the front one leaves")
 		koastManager.show("Third", "Last visible card")
 		koastManager.show("Fourth", "Waits off-screen until there is room")
+	},
+	"Stack 10" to {
+		setStyle(SampleStyle.Stacked)
+		repeat(10) { koastManager.show("Koast ${it + 1}", "Use the handle to expand the stack") }
+	},
+	"Custom Handle" to {
+		setStyle(SampleStyle.StackedCustomHandle)
+		repeat(5) { koastManager.show("Koast ${it + 1}", "Stack with a custom handle") }
 	},
 	"Custom Config" to {
 		setStyle(SampleStyle.CustomConfig)

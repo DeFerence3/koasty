@@ -170,6 +170,32 @@ KoastyProvider(
 
 The queue order is the same in both modes. The front card is the oldest koast. When it leaves, the next card moves forward and the next queued koast joins at the back.
 
+#### Expanding the stack
+
+A stacked host shows a handle next to the stack whenever more than one koast is queued. Clicking it spreads the whole queue out as a scrollable list, and clicking it again collapses it back into a stack. The default handle reads "n more koasts", where n counts every queued koast behind the front one.
+
+While the stack is expanded:
+
+- the front koast's countdown is paused, and starts over when the stack collapses;
+- every card can be swiped sideways or clicked, which dismisses that specific koast;
+- vertical drags scroll the list.
+
+The stack collapses by itself once only one koast is left. Pass `expandable = false` to `KoastDisplayMode.Stacked` to hide the handle, and `expandedSpacing` to change the gap between cards in the list.
+
+Provide `stackHandle` to draw your own handle. Koasty makes it clickable for you; call `state.toggle()` if your handle has its own button:
+
+```kotlin
+KoastyProvider(
+    koastManager = koastManager,
+    config = KoastyHostConfig(displayMode = KoastDisplayMode.Stacked()),
+    stackHandle = { state ->
+        Text(if (state.expanded) "Collapse" else "+${state.moreCount}")
+    }
+) {
+    AppContent()
+}
+```
+
 ## Customize the host
 
 Use `KoastyHostConfig` to adapt the default notification to your design system:

@@ -14,6 +14,7 @@ fun KoastyProvider(
     modifier: Modifier = Modifier,
     config: KoastyHostConfig = KoastyHostConfig(),
     koastContent: (@Composable (KoastRequest) -> Unit)? = null,
+    stackHandle: (@Composable (KoastStackHandleState) -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit
 ) {
     Box(
@@ -30,7 +31,8 @@ fun KoastyProvider(
                     else Modifier
                 ),
             config = config,
-            koastContent = koastContent
+            koastContent = koastContent,
+            stackHandle = stackHandle
         )
     }
 }

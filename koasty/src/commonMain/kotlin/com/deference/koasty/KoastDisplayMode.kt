@@ -27,16 +27,23 @@ sealed interface KoastDisplayMode {
      * @param peekOffset how far each card behind peeks out past the one
      * in front of it.
      * @param scaleStep how much smaller each card behind is drawn.
+     * @param expandable whether a handle is shown next to the stack.
+     * Clicking it spreads the whole queue out as a scrollable list and
+     * clicking it again collapses it back into a stack.
+     * @param expandedSpacing the gap between cards while expanded.
      */
     data class Stacked(
         val maxVisible: Int = 4,
         val peekOffset: Dp = 10.dp,
-        val scaleStep: Float = 0.05f
+        val scaleStep: Float = 0.05f,
+        val expandable: Boolean = true,
+        val expandedSpacing: Dp = 8.dp
     ) : KoastDisplayMode {
         init {
             require(maxVisible >= 1)
             require(peekOffset >= 0.dp)
             require(scaleStep in 0f..<1f)
+            require(expandedSpacing >= 0.dp)
         }
     }
 }

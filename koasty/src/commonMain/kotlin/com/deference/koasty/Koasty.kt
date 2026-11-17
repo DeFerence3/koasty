@@ -56,6 +56,13 @@ internal fun KoastPosition.toAlignment(): Alignment = when (this) {
     KoastPosition.BOTTOM_END -> Alignment.BottomEnd
 }
 
+internal val KoastPosition.horizontalAlignment: Alignment.Horizontal
+    get() = when (this) {
+        KoastPosition.TOP_START, KoastPosition.BOTTOM_START -> Alignment.Start
+        KoastPosition.TOP_CENTER, KoastPosition.BOTTOM_CENTER -> Alignment.CenterHorizontally
+        KoastPosition.TOP_END, KoastPosition.BOTTOM_END -> Alignment.End
+    }
+
 internal fun defaultKoastPosition(): KoastPosition = when (getPlatform().platform) {
     Platforms.DESKTOP, Platforms.WEB -> KoastPosition.BOTTOM_END
     Platforms.ANDROID, Platforms.IOS -> KoastPosition.TOP_CENTER

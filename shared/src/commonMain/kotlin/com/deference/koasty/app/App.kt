@@ -42,10 +42,13 @@ fun App() {
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 compact = true,
-                shape = RoundedCornerShape(20.dp)
+                respectSafeArea = false
             ),
             koastContent = if (style == SampleStyle.CustomLayout) {
                 { koast -> SampleLayout(koast) }
+            } else null,
+            stackHandle = if (style == SampleStyle.StackedCustomHandle) {
+                { state -> SampleStackHandle(state) }
             } else null,
         ){
 			val samples = remember { getSamples(koastManager) { style = it } }

@@ -19,7 +19,7 @@ data class KoastyHostConfig(
     val position: KoastPosition = defaultKoastPosition(),
     val compact: Boolean = defaultCompactKoastLayout(),
     val maxWidth: Dp = 448.dp,
-    val edgePadding: Dp = 16.dp,
+    val edgePadding: Dp = 0.dp,
 
     /**
      * How queued koasts are presented: one at a time, or stacked
@@ -69,6 +69,14 @@ data class KoastyHostConfig(
     val settleAnimationSpec: FiniteAnimationSpec<Float> = spring(
         dampingRatio = Spring.DampingRatioMediumBouncy,
         stiffness = Spring.StiffnessMedium
+    ),
+
+    /**
+     * Expanding and collapsing a [KoastDisplayMode.Stacked] stack.
+     */
+    val expandAnimationSpec: FiniteAnimationSpec<Float> = spring(
+        dampingRatio = Spring.DampingRatioNoBouncy,
+        stiffness = Spring.StiffnessMediumLow
     ),
 
     /**

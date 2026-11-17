@@ -1,9 +1,15 @@
 package com.deference.koasty
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,7 +22,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -24,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -42,8 +51,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -62,10 +75,40 @@ fun KoastyHost(
     koastManager: KoastManager,
     modifier: Modifier = Modifier,
     config: KoastyHostConfig = KoastyHostConfig(),
-    koastContent: (@Composable (KoastRequest) -> Unit)? = null
+    koastContent: (@Composable (KoastRequest) -> Unit)? = null,
+    stackHandle: (@Composable (KoastStackHandleState) -> Unit)? = null
 ) {
     val managerState by koastManager.state.collectAsState()
     val stacked = config.displayMode as? KoastDisplayMode.Stacked
+    val queueSize = managerState.queue.size
+
+    /*
+     * Expanded stack: `expanded` is where the user asked to go,
+     * `expandProgress` animates the cards there (0 = stack, 1 = list).
+     */
+    var expanded by remember { mutableStateOf(false) }
+    val expandProgress = remember { Animatable(0f) }
+    val scrollState = rememberScrollState()
+    val hostScope = rememberCoroutineScope()
+
+    fun setExpanded(value: Boolean) {
+        expanded = value
+        hostScope.launch {
+            if (!value) launch { scrollState.animateScrollTo(0) }
+            expandProgress.animateTo(
+                targetValue = if (value) 1f else 0f,
+                animationSpec = config.expandAnimationSpec
+            )
+        }
+    }
+
+    val canExpand = stacked != null && stacked.expandable
+
+    // Nothing left to spread out, or stacking was switched off.
+    LaunchedEffect(queueSize <= 1 || !canExpand) {
+        if ((queueSize <= 1 || !canExpand) && expanded) setExpanded(false)
+    }
+
     val koasts = managerState.queue.map { KoastEntry(it) }.toMutableStateList()
     if (koasts.isEmpty()) return
 
@@ -90,35 +133,164 @@ fun KoastyHost(
         if (swipe.ownerId == frontId) swipe.progress else 0f
     }
 
-    Box(
+    val fromTop = config.position.isTop
+    val density = LocalDensity.current
+
+    /*
+     * While collapsed, leave room past the front card for the cards
+     * peeking out behind it, so the handle sits beyond them.
+     */
+    val reservedPeekPx = if (stacked == null) 0 else with(density) {
+        stacked.peekOffset.roundToPx() *
+                (minOf(queueSize, stacked.maxVisible) - 1).coerceAtLeast(0)
+    }
+    val spacingPx = with(density) {
+        (stacked?.expandedSpacing ?: 0.dp).roundToPx()
+    }
+
+    // Scroll only once the cards start spreading out; while stacked,
+    // scrolling would clip the peeking cards.
+    val listMode by remember {
+        derivedStateOf { expanded || expandProgress.value > 0f }
+    }
+
+    val showHandle = canExpand && (queueSize > 1 || expanded)
+
+    val handle: @Composable () -> Unit = {
+        AnimatedVisibility(
+            visible = showHandle,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            val handleState = KoastStackHandleState(
+                moreCount = (queueSize - 1).coerceAtLeast(0),
+                expanded = expanded,
+                onToggle = { setExpanded(!expanded) }
+            )
+
+            Box(
+                modifier = Modifier
+                    .padding(vertical = 8.dp)
+                    .clickable(
+                        interactionSource = null,
+                        indication = null,
+                        onClick = handleState::toggle
+                    )
+            ) {
+                if (stackHandle != null) {
+                    stackHandle(handleState)
+                } else {
+                    KoastStackHandle(state = handleState, config = config)
+                }
+            }
+        }
+    }
+
+    Column(
         modifier = modifier
             .then(
                 if (config.compact) Modifier.widthIn(max = config.maxWidth)
                 else Modifier.fillMaxWidth()
             )
             .zIndex(1000f),
-        contentAlignment = config.position.toAlignment()
+        horizontalAlignment = config.position.horizontalAlignment
     ) {
-        var activeIndex = 0
-        koasts.forEach { entry ->
-            val stackIndex = if (entry.exiting) entry.exitIndex else activeIndex++
-            key(entry.koast.id) {
-                KoastCard(
-                    koast = entry.koast,
-                    exiting = entry.exiting,
-                    stackIndex = stackIndex,
-                    stacked = stacked,
-                    stackHeightPx = { stackHeightPx.value },
-                    frontSwipeProgress = frontSwipeProgress,
-                    onSwipeProgress = { swipe.report(entry.koast.id, it) },
-                    onFrontHeightChanged = { frontHeightPx = it },
-                    onExited = { koasts.remove(entry) },
-                    koastManager = koastManager,
-                    config = config,
-                    koastContent = koastContent,
-                    modifier = Modifier.zIndex(
-                        -stackIndex.toFloat() + if (entry.exiting) 0.5f else 0f
+        if (!fromTop) handle()
+
+        KoastStackLayout(
+            expandProgress = { expandProgress.value },
+            fromTop = fromTop,
+            horizontalAlignment = config.position.horizontalAlignment,
+            reservedPeekPx = reservedPeekPx,
+            spacingPx = spacingPx,
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .then(
+                    if (listMode) {
+                        Modifier.verticalScroll(
+                            state = scrollState,
+                            reverseScrolling = !fromTop
+                        )
+                    } else {
+                        Modifier
+                    }
+                )
+        ) {
+            var activeIndex = 0
+            koasts.forEach { entry ->
+                val stackIndex = if (entry.exiting) entry.exitIndex else activeIndex++
+                key(entry.koast.id) {
+                    KoastCard(
+                        koast = entry.koast,
+                        exiting = entry.exiting,
+                        stackIndex = stackIndex,
+                        stacked = stacked,
+                        expanded = expanded,
+                        expandProgress = { expandProgress.value },
+                        stackHeightPx = { stackHeightPx.value },
+                        frontSwipeProgress = frontSwipeProgress,
+                        onSwipeProgress = { swipe.report(entry.koast.id, it) },
+                        onFrontHeightChanged = { frontHeightPx = it },
+                        onExited = { koasts.remove(entry) },
+                        koastManager = koastManager,
+                        config = config,
+                        koastContent = koastContent,
+                        modifier = Modifier.zIndex(
+                            -stackIndex.toFloat() + if (entry.exiting) 0.5f else 0f
+                        )
                     )
+                }
+            }
+        }
+
+        if (fromTop) handle()
+    }
+}
+
+/**
+ * Places the cards either on top of each other at the screen edge
+ * (stacked) or one after another moving away from it (list), blending
+ * between the two by `expandProgress`. Children arrive front card first.
+ */
+@Composable
+private fun KoastStackLayout(
+    expandProgress: () -> Float,
+    fromTop: Boolean,
+    horizontalAlignment: Alignment.Horizontal,
+    reservedPeekPx: Int,
+    spacingPx: Int,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    Layout(content = content, modifier = modifier) { measurables, constraints ->
+        val childConstraints = constraints.copy(
+            minWidth = 0,
+            minHeight = 0,
+            maxHeight = Constraints.Infinity
+        )
+        val placeables = measurables.map { it.measure(childConstraints) }
+        val progress = expandProgress().coerceIn(0f, 1f)
+
+        val width = (placeables.maxOfOrNull { it.width } ?: 0)
+            .coerceIn(constraints.minWidth, constraints.maxWidth)
+
+        val stackedHeight = (placeables.maxOfOrNull { it.height } ?: 0) + reservedPeekPx
+        val listHeight = placeables.sumOf { it.height } +
+                spacingPx * (placeables.size - 1).coerceAtLeast(0)
+
+        val height = lerp(stackedHeight, listHeight, progress)
+            .coerceIn(constraints.minHeight, constraints.maxHeight)
+
+        layout(width, height) {
+            var listOffset = 0
+            placeables.forEach { placeable ->
+                // Distance of the card's outer edge from the screen edge.
+                val fromEdge = lerp(0, listOffset, progress)
+                listOffset += placeable.height + spacingPx
+
+                placeable.place(
+                    x = horizontalAlignment.align(placeable.width, width, layoutDirection),
+                    y = if (fromTop) fromEdge else height - fromEdge - placeable.height
                 )
             }
         }
@@ -131,6 +303,8 @@ private fun KoastCard(
     exiting: Boolean,
     stackIndex: Int,
     stacked: KoastDisplayMode.Stacked?,
+    expanded: Boolean,
+    expandProgress: () -> Float,
     stackHeightPx: () -> Float,
     frontSwipeProgress: () -> Float,
     onSwipeProgress: (Float) -> Unit,
@@ -194,6 +368,12 @@ private fun KoastCard(
      */
     val isFront = stackIndex == 0 && !exiting
 
+    /*
+     * While the stack is expanded every card can be swiped or clicked,
+     * each dismissing its own koast.
+     */
+    val interactive = isFront || (expanded && !exiting)
+
     LaunchedEffect(Unit) {
         /*
          * Give the koast one frame to measure itself.
@@ -231,8 +411,12 @@ private fun KoastCard(
 
         currentOnExited()
     }
-    LaunchedEffect(isFront) {
-        if (!isFront) return@LaunchedEffect
+    /*
+     * Paused while the stack is expanded; collapsing starts the
+     * full duration again.
+     */
+    LaunchedEffect(isFront, expanded) {
+        if (!isFront || expanded) return@LaunchedEffect
         val lifetime = koast.lifetime as? KoastLifetime.Timed ?: return@LaunchedEffect
 
         snapshotFlow { entered }.first { it }
@@ -418,8 +602,60 @@ private fun KoastCard(
         }
     }
 
+    fun endHorizontalSwipe() {
+        val width = measuredSize.width
+            .toFloat()
+            .coerceAtLeast(1f)
+
+        if (abs(dragX) / width >= config.horizontalDismissThresholdFraction) {
+            dismissHorizontally()
+        } else {
+            settleBack()
+        }
+    }
+
     val gestureModifier =
         if (
+            expanded &&
+            interactive &&
+            koast.dismissible &&
+            config.horizontalSwipeEnabled
+        ) {
+            /*
+             * Horizontal only, so vertical drags scroll the expanded list.
+             */
+            Modifier.pointerInput(
+                koast.id,
+                config,
+                expanded
+            ) {
+                detectHorizontalDragGestures(
+                    onDragStart = {
+                        gestureJob?.cancel()
+                    },
+                    onDragEnd = {
+                        endHorizontalSwipe()
+                    },
+                    onDragCancel = {
+                        settleBack()
+                    },
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
+                        dragX += dragAmount
+
+                        val width = measuredSize.width
+                            .toFloat()
+                            .coerceAtLeast(1f)
+
+                        gestureAlpha = (1f - abs(dragX) / width * 0.65f)
+                            .coerceIn(0.25f, 1f)
+
+                        publishSwipeProgress()
+                    }
+                )
+            }
+        } else if (
+            !expanded &&
             isFront &&
             koast.dismissible &&
             (
@@ -429,7 +665,8 @@ private fun KoastCard(
         ) {
             Modifier.pointerInput(
                 koast.id,
-                config
+                config,
+                expanded
             ) {
                 detectDragGestures(
                     onDragStart = {
@@ -571,7 +808,7 @@ private fun KoastCard(
 
     val clickableModifier =
         if (
-            isFront &&
+            interactive &&
             koast.onClick != null
         ) {
             Modifier.clickable {
@@ -600,7 +837,15 @@ private fun KoastCard(
                         gestureAlpha
                 ).coerceIn(0f, 1f)
 
-    val pull = if (stacked != null && !exiting && stackIndex > 0) frontSwipeProgress() else 0f
+    /*
+     * 0 = stacked, 1 = spread out as a list. Every stack effect below
+     * (pull, scale, peek, squeezed height, hidden depth) fades out with it.
+     */
+    val listProgress = if (stacked == null) 0f else expandProgress().coerceIn(0f, 1f)
+
+    val pull =
+        if (stacked != null && !exiting && stackIndex > 0) frontSwipeProgress() * (1f - listProgress)
+        else 0f
 
     val lastVisualIndex = remember { LastVisualIndex(stackIndex - pull) }
 
@@ -621,17 +866,43 @@ private fun KoastCard(
      * side facing away from the screen edge.
      */
     val density = LocalDensity.current
-    val stackDepth = visualIndex.coerceAtLeast(0f)
+    /*
+     * Cards past maxVisible wait at the last visible slot, invisible,
+     * and fade in as they move forward (or as the stack expands).
+     */
+    val lastSlot = ((stacked?.maxVisible ?: 1) - 1).toFloat()
+    val stackDepth = visualIndex.coerceIn(0f, lastSlot)
+
+    val stackAlpha =
+        if (stacked == null) 1f
+        else lerp(
+            (stacked.maxVisible - visualIndex).coerceIn(0f, 1f),
+            1f,
+            listProgress
+        )
 
     val stackScale =
         if (stacked == null) 1f
-        else (1f - stackDepth * stacked.scaleStep).coerceAtLeast(0f)
+        else lerp(
+            (1f - stackDepth * stacked.scaleStep).coerceAtLeast(0f),
+            1f,
+            listProgress
+        )
 
     val stackOffsetY = if (stacked == null) {
             0f
         } else {
-            with(density) { stacked.peekOffset.toPx() } * stackDepth * (if (entersFromTop) 1f else -1f)
+            with(density) { stacked.peekOffset.toPx() } * stackDepth * (if (entersFromTop) 1f else -1f) *
+                    (1f - listProgress)
         }
+
+    /*
+     * While fully expanded, a card whose list slot moves (because a koast
+     * above it was dismissed) glides there instead of jumping.
+     */
+    val placementShift = remember { Animatable(0f) }
+    var placedY by remember { mutableFloatStateOf(Float.NaN) }
+    val currentExpanded by rememberUpdatedState(expanded)
 
     /*
      * One step back or more: the stack height. At the front: its own height.
@@ -648,8 +919,9 @@ private fun KoastCard(
             else stackHeight
 
         val expansion = (1f - stackDepth).coerceIn(0f, 1f)
+        val squeezed = lerp(stackHeight, natural, expansion)
 
-        with(density) { lerp(stackHeight, natural, expansion).toDp() }
+        with(density) { lerp(squeezed, natural, listProgress).toDp() }
     }
 
     Box(
@@ -658,6 +930,24 @@ private fun KoastCard(
                 if (config.compact) Modifier.widthIn(max = config.maxWidth)
                 else Modifier.fillMaxWidth()
             )
+            .onPlaced { coordinates ->
+                val y = coordinates.positionInParent().y
+                val previous = placedY
+                placedY = y
+
+                if (
+                    currentExpanded &&
+                    expandProgress() >= 1f &&
+                    !previous.isNaN() &&
+                    previous != y
+                ) {
+                    val start = placementShift.value + (previous - y)
+                    coroutineScope.launch {
+                        placementShift.snapTo(start)
+                        placementShift.animateTo(0f, config.settleAnimationSpec)
+                    }
+                }
+            }
             .graphicsLayer {
                 transformOrigin = TransformOrigin(
                     pivotFractionX = 0.5f,
@@ -666,8 +956,8 @@ private fun KoastCard(
                 scaleX = stackScale
                 scaleY = stackScale
                 translationX = dragX
-                translationY = entranceY + dragY + stackOffsetY
-                alpha = finalAlpha
+                translationY = entranceY + dragY + stackOffsetY + placementShift.value
+                alpha = finalAlpha * stackAlpha
             }
             .onSizeChanged {
                 measuredSize = it
@@ -725,7 +1015,6 @@ fun DefaultKoastContent(
 ) {
     Row(
         modifier = modifier
-            .statusBarsPadding()
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp)),
         verticalAlignment = Alignment.CenterVertically
