@@ -5,9 +5,9 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
@@ -69,7 +69,12 @@ data class KoastyHostConfig(
     val settleAnimationSpec: FiniteAnimationSpec<Float> = spring(
         dampingRatio = Spring.DampingRatioMediumBouncy,
         stiffness = Spring.StiffnessMedium
-    )
+    ),
+
+    /**
+     * whether koast should use safeDrawingPadding() or not
+     */
+    val respectSafeArea: Boolean = false
 ) {
     init {
         require(maxWidth > 0.dp)

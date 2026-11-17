@@ -2,9 +2,9 @@ package com.deference.koasty
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
@@ -13,7 +13,6 @@ fun KoastyProvider(
     koastManager: KoastManager,
     modifier: Modifier = Modifier,
     config: KoastyHostConfig = KoastyHostConfig(),
-    leadingContent: (@Composable RowScope.(KoastRequest) -> Unit)? = null,
     koastContent: (@Composable (KoastRequest) -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit
 ) {
@@ -25,12 +24,12 @@ fun KoastyProvider(
             koastManager = koastManager,
             modifier = Modifier
                 .align(config.position.toAlignment())
+                .padding(config.edgePadding)
                 .then(
-                    if (config.compact) Modifier.padding(config.edgePadding)
+                    if (config.respectSafeArea) Modifier.safeDrawingPadding()
                     else Modifier
                 ),
             config = config,
-            leadingContent = leadingContent,
             koastContent = koastContent
         )
     }

@@ -2,14 +2,11 @@ package com.deference.koasty
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FiniteAnimationSpec
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,11 +14,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,7 +28,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -42,14 +38,16 @@ import androidx.compose.runtime.toMutableStateList
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.util.lerp
 import androidx.compose.ui.zIndex
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
@@ -59,24 +57,11 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.max
 
-/**
- * A koast the host is drawing. It stays drawn while it animates out,
- * after the manager has already removed it from the queue.
- */
-@Stable
-private class KoastEntry(val koast: KoastRequest) {
-    var exiting by mutableStateOf(false)
-
-    // Stack position the koast had when it started leaving.
-    var exitIndex by mutableIntStateOf(0)
-}
-
 @Composable
 fun KoastyHost(
     koastManager: KoastManager,
     modifier: Modifier = Modifier,
     config: KoastyHostConfig = KoastyHostConfig(),
-    leadingContent: (@Composable RowScope.(KoastRequest) -> Unit)? = null,
     koastContent: (@Composable (KoastRequest) -> Unit)? = null
 ) {
     val managerState by koastManager.state.collectAsState()
@@ -84,11 +69,26 @@ fun KoastyHost(
     val koasts = managerState.queue.map { KoastEntry(it) }.toMutableStateList()
     if (koasts.isEmpty()) return
 
-    /*
-     * Cards behind the front one are drawn at the front card's height
-     * so each peeks out by the same amount whatever its own content.
-     */
     var frontHeightPx by remember { mutableIntStateOf(0) }
+
+    val stackHeightPx = remember { Animatable(0f) }
+    LaunchedEffect(frontHeightPx) {
+        if (frontHeightPx <= 0) return@LaunchedEffect
+        if (stackHeightPx.value <= 0f) {
+            stackHeightPx.snapTo(frontHeightPx.toFloat())
+        } else {
+            stackHeightPx.animateTo(
+                targetValue = frontHeightPx.toFloat(),
+                animationSpec = config.settleAnimationSpec
+            )
+        }
+    }
+
+    val swipe = remember { SwipeProgressState() }
+    val frontId = koasts.firstOrNull { !it.exiting }?.koast?.id
+    val frontSwipeProgress: () -> Float = {
+        if (swipe.ownerId == frontId) swipe.progress else 0f
+    }
 
     Box(
         modifier = modifier
@@ -108,12 +108,13 @@ fun KoastyHost(
                     exiting = entry.exiting,
                     stackIndex = stackIndex,
                     stacked = stacked,
-                    frontHeightPx = frontHeightPx,
+                    stackHeightPx = { stackHeightPx.value },
+                    frontSwipeProgress = frontSwipeProgress,
+                    onSwipeProgress = { swipe.report(entry.koast.id, it) },
                     onFrontHeightChanged = { frontHeightPx = it },
                     onExited = { koasts.remove(entry) },
                     koastManager = koastManager,
                     config = config,
-                    leadingContent = leadingContent,
                     koastContent = koastContent,
                     modifier = Modifier.zIndex(
                         -stackIndex.toFloat() + if (entry.exiting) 0.5f else 0f
@@ -130,17 +131,26 @@ private fun KoastCard(
     exiting: Boolean,
     stackIndex: Int,
     stacked: KoastDisplayMode.Stacked?,
-    frontHeightPx: Int,
+    stackHeightPx: () -> Float,
+    frontSwipeProgress: () -> Float,
+    onSwipeProgress: (Float) -> Unit,
     onFrontHeightChanged: (Int) -> Unit,
     onExited: () -> Unit,
     koastManager: KoastManager,
     config: KoastyHostConfig,
-    leadingContent: (@Composable RowScope.(KoastRequest) -> Unit)?,
     koastContent: (@Composable (KoastRequest) -> Unit)?,
     modifier: Modifier = Modifier
 ) {
     var measuredSize by remember {
         mutableStateOf(IntSize.Zero)
+    }
+
+    /*
+     * Height the content wants on its own, measured even while
+     * the card is squeezed to the stack height.
+     */
+    var naturalHeightPx by remember {
+        mutableIntStateOf(0)
     }
 
     /*
@@ -176,6 +186,7 @@ private fun KoastCard(
 
     val coroutineScope = rememberCoroutineScope()
     val currentOnExited by rememberUpdatedState(onExited)
+    val currentOnSwipeProgress by rememberUpdatedState(onSwipeProgress)
 
     /*
      * Only the front koast counts down, takes input and
@@ -235,7 +246,27 @@ private fun KoastCard(
         }
     }
 
-    val interactive = isFront
+    /*
+     * Tells the stack how far this koast has traveled toward leaving.
+     * Called on every drag frame and every frame of the settle / dismiss
+     * animations, so the cards behind follow the finger both ways.
+     */
+    fun publishSwipeProgress() {
+        val width = measuredSize.width
+            .toFloat()
+            .coerceAtLeast(1f)
+
+        val height = measuredSize.height
+            .toFloat()
+            .coerceAtLeast(1f)
+
+        val horizontal = abs(dragX) / width
+        val upward = (-dragY).coerceAtLeast(0f) / height
+
+        currentOnSwipeProgress(
+            max(horizontal, upward).coerceIn(0f, 1f)
+        )
+    }
 
     fun settleBack() {
         gestureJob?.cancel()
@@ -253,6 +284,7 @@ private fun KoastCard(
                         spec = config.settleAnimationSpec
                     ) {
                         dragX = it
+                        publishSwipeProgress()
                     }
                 }
 
@@ -263,6 +295,7 @@ private fun KoastCard(
                         spec = config.settleAnimationSpec
                     ) {
                         dragY = it
+                        publishSwipeProgress()
                     }
                 }
 
@@ -305,6 +338,7 @@ private fun KoastCard(
                         spec = config.exitAnimationSpec
                     ) {
                         dragX = it
+                        publishSwipeProgress()
                     }
                 }
 
@@ -315,6 +349,7 @@ private fun KoastCard(
                         spec = config.exitAnimationSpec
                     ) {
                         dragY = it
+                        publishSwipeProgress()
                     }
                 }
 
@@ -353,6 +388,7 @@ private fun KoastCard(
                         spec = config.exitAnimationSpec
                     ) {
                         dragX = it
+                        publishSwipeProgress()
                     }
                 }
 
@@ -363,6 +399,7 @@ private fun KoastCard(
                         spec = config.exitAnimationSpec
                     ) {
                         dragY = it
+                        publishSwipeProgress()
                     }
                 }
 
@@ -383,7 +420,7 @@ private fun KoastCard(
 
     val gestureModifier =
         if (
-            interactive &&
+            isFront &&
             koast.dismissible &&
             (
                     config.horizontalSwipeEnabled ||
@@ -523,6 +560,8 @@ private fun KoastCard(
                                 minimumValue = 0.25f,
                                 maximumValue = 1f
                             )
+
+                        publishSwipeProgress()
                     }
                 )
             }
@@ -532,7 +571,7 @@ private fun KoastCard(
 
     val clickableModifier =
         if (
-            interactive &&
+            isFront &&
             koast.onClick != null
         ) {
             Modifier.clickable {
@@ -561,32 +600,57 @@ private fun KoastCard(
                         gestureAlpha
                 ).coerceIn(0f, 1f)
 
+    val pull = if (stacked != null && !exiting && stackIndex > 0) frontSwipeProgress() else 0f
+
+    val lastVisualIndex = remember { LastVisualIndex(stackIndex - pull) }
+
+    val baseIndex = remember(stackIndex) { Animatable(lastVisualIndex.value + pull) }
+
+    LaunchedEffect(baseIndex) {
+        baseIndex.animateTo(
+            targetValue = stackIndex.toFloat(),
+            animationSpec = config.settleAnimationSpec
+        )
+    }
+
+    val visualIndex = baseIndex.value - pull
+    lastVisualIndex.value = visualIndex
+
     /*
      * Cards behind the front one shrink a little and peek out on the
      * side facing away from the screen edge.
      */
     val density = LocalDensity.current
+    val stackDepth = visualIndex.coerceAtLeast(0f)
 
-    val stackScale by animateFloatAsState(
-        targetValue = if (stacked == null) 1f else (1f - stackIndex * stacked.scaleStep).coerceAtLeast(0f),
-        animationSpec = config.settleAnimationSpec
-    )
+    val stackScale =
+        if (stacked == null) 1f
+        else (1f - stackDepth * stacked.scaleStep).coerceAtLeast(0f)
 
-    val stackOffsetY by animateFloatAsState(
-        targetValue = if (stacked == null) {
+    val stackOffsetY = if (stacked == null) {
             0f
         } else {
-            with(density) { stacked.peekOffset.toPx() } * stackIndex * (if (entersFromTop) 1f else -1f)
-        },
-        animationSpec = config.settleAnimationSpec
-    )
-
-    val behindHeight =
-        if (stacked != null && stackIndex > 0 && frontHeightPx > 0) {
-            with(density) { frontHeightPx.toDp() }
-        } else {
-            null
+            with(density) { stacked.peekOffset.toPx() } * stackDepth * (if (entersFromTop) 1f else -1f)
         }
+
+    /*
+     * One step back or more: the stack height. At the front: its own height.
+     * In between: blended, so the card grows into its full size as it comes forward.
+     */
+    val forcedHeight: Dp? = run {
+        val stackHeight = stackHeightPx()
+        if (stacked == null || stackHeight <= 0f || stackDepth <= 0.001f) {
+            return@run null
+        }
+
+        val natural =
+            if (naturalHeightPx > 0) naturalHeightPx.toFloat()
+            else stackHeight
+
+        val expansion = (1f - stackDepth).coerceIn(0f, 1f)
+
+        with(density) { lerp(stackHeight, natural, expansion).toDp() }
+    }
 
     Box(
         modifier = modifier
@@ -618,7 +682,7 @@ private fun KoastCard(
                     else Modifier.fillMaxWidth()
                 )
                 .then(
-                    if (behindHeight != null) Modifier.height(behindHeight)
+                    if (forcedHeight != null) Modifier.height(forcedHeight)
                     else Modifier
                 ),
             color = config.containerColor,
@@ -628,6 +692,10 @@ private fun KoastCard(
         ) {
             Box(
                 modifier = Modifier
+                    .wrapContentHeight(unbounded = true)
+                    .onSizeChanged {
+                        naturalHeightPx = it.height
+                    }
                     .then(
                         if (config.compact) Modifier.widthIn(max = config.maxWidth)
                         else Modifier.fillMaxWidth()
@@ -642,7 +710,6 @@ private fun KoastCard(
                     DefaultKoastContent(
                         koast = koast,
                         config = config,
-                        leadingContent = leadingContent
                     )
                 }
             }
@@ -654,22 +721,15 @@ private fun KoastCard(
 fun DefaultKoastContent(
     koast: KoastRequest,
     config: KoastyHostConfig,
-    leadingContent: (@Composable RowScope.(KoastRequest) -> Unit)?,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier
             .statusBarsPadding()
-            .fillMaxWidth(),
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp)),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (leadingContent != null) {
-            leadingContent(koast)
-            Spacer(
-                Modifier.width(18.dp)
-            )
-        }
-
         Column(
             modifier = Modifier.weight(1f)
         ) {
@@ -695,6 +755,43 @@ fun DefaultKoastContent(
                 )
             }
         }
+    }
+}
+
+/*
+ * Where a card was last drawn in the stack. A plain holder, not state,
+ * so writing it during composition triggers nothing.
+ */
+private class LastVisualIndex(var value: Float)
+
+/**
+ * A koast the host is drawing. It stays drawn while it animates out,
+ * after the manager has already removed it from the queue.
+ */
+@Stable
+private class KoastEntry(val koast: KoastRequest) {
+    var exiting by mutableStateOf(false)
+
+    // Stack position the koast had when it started leaving.
+    var exitIndex by mutableIntStateOf(0)
+}
+
+/*
+ * How far the front koast has been swiped away: 0 = resting, 1 = fully gone.
+ * Tagged with the id of the koast that reported it, so a leftover value from
+ * a koast that has already left the queue is ignored.
+ */
+@Stable
+private class SwipeProgressState {
+    var ownerId by mutableStateOf<Any?>(null)
+        private set
+
+    var progress by mutableFloatStateOf(0f)
+        private set
+
+    fun report(id: Any?, value: Float) {
+        ownerId = id
+        progress = value
     }
 }
 
