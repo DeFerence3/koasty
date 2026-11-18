@@ -14,10 +14,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
@@ -70,6 +72,15 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.max
 
+/**
+ * Draws the [koastManager] queue over the area it is given, usually the
+ * whole screen. [KoastyProvider] places it for you.
+ *
+ * Koasts are split into one lane per [KoastPosition]: a koast goes to its
+ * [KoastStyle.position], or to [KoastyHostConfig.position] when it has
+ * none. Each lane is its own first-in, first-out stack with its own front
+ * koast, so lanes never wait on each other.
+ */
 @Composable
 fun KoastyHost(
     koastManager: KoastManager,
@@ -79,10 +90,51 @@ fun KoastyHost(
     stackHandle: (@Composable (KoastStackHandleState) -> Unit)? = null
 ) {
     val managerState by koastManager.state.collectAsState()
-    val stacked: KoastDisplayMode.Stacked = when (val mode = config.displayMode) {
-        is KoastDisplayMode.Stacked -> mode
+
+    Box(modifier = modifier.fillMaxSize()) {
+        /*
+         * Every lane stays composed, even when empty, so a lane whose
+         * last koast was dismissed still plays its exit animation.
+         */
+        for (position in KoastPosition.entries) {
+            key(position) {
+                val laneQueue = remember(managerState.queue, position, config.position) {
+                    managerState.queue.inLane(position, config)
+                }
+
+                KoastLane(
+                    position = position,
+                    queue = laneQueue,
+                    koastManager = koastManager,
+                    config = config,
+                    koastContent = koastContent,
+                    stackHandle = stackHandle,
+                    modifier = Modifier
+                        .align(position.toAlignment())
+                        .padding(config.edgePadding)
+                        .then(
+                            if (config.respectSafeArea) Modifier.safeDrawingPadding()
+                            else Modifier
+                        )
+                )
+            }
+        }
     }
-    val queueSize = managerState.queue.size
+}
+
+/** The koasts at one [position], stacked or listed as the display mode says. */
+@Composable
+private fun KoastLane(
+    position: KoastPosition,
+    queue: List<KoastRequest>,
+    koastManager: KoastManager,
+    config: KoastyHostConfig,
+    koastContent: (@Composable (KoastRequest) -> Unit)?,
+    stackHandle: (@Composable (KoastStackHandleState) -> Unit)?,
+    modifier: Modifier = Modifier
+) {
+    val stacked: KoastDisplayMode.Stacked = queue.laneDisplayMode(config)
+    val queueSize = queue.size
 
     /*
      * Expanded stack: `expanded` is where the user asked to go,
@@ -118,7 +170,7 @@ fun KoastyHost(
      */
     val koastEntries = remember { KoastEntries() }
     var exitedCount by remember { mutableIntStateOf(0) }
-    val koasts = exitedCount.let { koastEntries.sync(managerState.queue) }
+    val koasts = exitedCount.let { koastEntries.sync(queue) }
     if (koasts.isEmpty()) return
 
     var frontHeightPx by remember { mutableIntStateOf(0) }
@@ -142,7 +194,7 @@ fun KoastyHost(
         if (swipe.ownerId == frontId) swipe.progress else 0f
     }
 
-    val fromTop = config.position.isTop
+    val fromTop = position.isTop
     val density = LocalDensity.current
 
     /*
@@ -195,21 +247,27 @@ fun KoastyHost(
         }
     }
 
+    /*
+     * The lane fills the width if any card in it does; otherwise it is
+     * as wide as its widest compact card is allowed to be.
+     */
+    val styles = koasts.map { config.resolve(it.koast.style) }
+    val laneWidth =
+        if (styles.all { it.compact }) Modifier.widthIn(max = styles.maxOf { it.maxWidth })
+        else Modifier.fillMaxWidth()
+
     Column(
         modifier = modifier
-            .then(
-                if (config.compact) Modifier.widthIn(max = config.maxWidth)
-                else Modifier.fillMaxWidth()
-            )
+            .then(laneWidth)
             .zIndex(1000f),
-        horizontalAlignment = config.position.horizontalAlignment
+        horizontalAlignment = position.horizontalAlignment
     ) {
         if (!fromTop) handle()
 
         KoastStackLayout(
             expandProgress = { expandProgress.value },
             fromTop = fromTop,
-            horizontalAlignment = config.position.horizontalAlignment,
+            horizontalAlignment = position.horizontalAlignment,
             reservedPeekPx = reservedPeekPx,
             spacingPx = spacingPx,
             modifier = Modifier
@@ -232,6 +290,7 @@ fun KoastyHost(
                     KoastCard(
                         koast = entry.koast,
                         exiting = entry.exiting,
+                        fromTop = fromTop,
                         stackIndex = stackIndex,
                         stacked = stacked,
                         expanded = expanded,
@@ -313,6 +372,7 @@ private fun KoastStackLayout(
 private fun KoastCard(
     koast: KoastRequest,
     exiting: Boolean,
+    fromTop: Boolean,
     stackIndex: Int,
     stacked: KoastDisplayMode.Stacked,
     expanded: Boolean,
@@ -327,6 +387,9 @@ private fun KoastCard(
     koastContent: (@Composable (KoastRequest) -> Unit)?,
     modifier: Modifier = Modifier
 ) {
+    // This koast's own style, with the gaps filled in from the host config.
+    val style = remember(koast.style, config) { config.resolve(koast.style) }
+
     var measuredSize by remember {
         mutableStateOf(IntSize.Zero)
     }
@@ -633,7 +696,7 @@ private fun KoastCard(
             expanded &&
             interactive &&
             koast.dismissible &&
-            config.horizontalSwipeEnabled
+            style.horizontalSwipeEnabled
         ) {
             /*
              * Horizontal only, so vertical drags scroll the expanded list.
@@ -641,6 +704,7 @@ private fun KoastCard(
             Modifier.pointerInput(
                 koast.id,
                 config,
+                style,
                 expanded
             ) {
                 detectHorizontalDragGestures(
@@ -673,13 +737,14 @@ private fun KoastCard(
             isFront &&
             koast.dismissible &&
             (
-                    config.horizontalSwipeEnabled ||
-                            config.swipeUpEnabled
+                    style.horizontalSwipeEnabled ||
+                            style.swipeUpEnabled
                     )
         ) {
             Modifier.pointerInput(
                 koast.id,
                 config,
+                style,
                 expanded
             ) {
                 detectDragGestures(
@@ -701,14 +766,14 @@ private fun KoastCard(
                             .coerceAtLeast(1f)
 
                         val horizontalProgress =
-                            if (config.horizontalSwipeEnabled) {
+                            if (style.horizontalSwipeEnabled) {
                                 abs(dragX) / width
                             } else {
                                 0f
                             }
 
                         val upwardProgress =
-                            if (config.swipeUpEnabled) {
+                            if (style.swipeUpEnabled) {
                                 (-dragY)
                                     .coerceAtLeast(0f) / height
                             } else {
@@ -768,11 +833,11 @@ private fun KoastCard(
                     onDrag = { change, dragAmount ->
                         change.consume()
 
-                        if (config.horizontalSwipeEnabled) {
+                        if (style.horizontalSwipeEnabled) {
                             dragX += dragAmount.x
                         }
 
-                        if (config.swipeUpEnabled) {
+                        if (style.swipeUpEnabled) {
                             /*
                              * Don't allow dragging downward.
                              * Only upward movement.
@@ -836,7 +901,7 @@ private fun KoastCard(
             Modifier
         }
 
-    val entersFromTop = config.position.isTop
+    val entersFromTop = fromTop
     val enteredAtFront = remember { stackIndex == 0 }
     val slides = if (exiting) stackIndex == 0 else enteredAtFront
 
@@ -933,7 +998,7 @@ private fun KoastCard(
     Box(
         modifier = modifier
             .then(
-                if (config.compact) Modifier.widthIn(max = config.maxWidth)
+                if (style.compact) Modifier.widthIn(max = style.maxWidth)
                 else Modifier.fillMaxWidth()
             )
             .onPlaced { coordinates ->
@@ -968,23 +1033,25 @@ private fun KoastCard(
             .onSizeChanged {
                 measuredSize = it
             }
+            // Inside the measured size, so the entrance slide clears it too.
+            .padding(style.outerPadding)
             .then(gestureModifier)
             .then(clickableModifier)
     ) {
         Surface(
             modifier = Modifier
                 .then(
-                    if (config.compact) Modifier.widthIn(max = config.maxWidth)
+                    if (style.compact) Modifier.widthIn(max = style.maxWidth)
                     else Modifier.fillMaxWidth()
                 )
                 .then(
                     if (forcedHeight != null) Modifier.height(forcedHeight)
                     else Modifier
                 ),
-            color = config.containerColor,
-            contentColor = config.contentColor,
-            shape = config.shape,
-            shadowElevation = config.shadowElevation
+            color = style.containerColor,
+            contentColor = style.contentColor,
+            shape = style.shape,
+            shadowElevation = style.shadowElevation
         ) {
             Box(
                 modifier = Modifier
@@ -993,15 +1060,16 @@ private fun KoastCard(
                         naturalHeightPx = it.height
                     }
                     .then(
-                        if (config.compact) Modifier.widthIn(max = config.maxWidth)
+                        if (style.compact) Modifier.widthIn(max = style.maxWidth)
                         else Modifier.fillMaxWidth()
                     )
-                    .heightIn(min = config.minHeight)
-                    .padding(config.contentPadding),
+                    .heightIn(min = style.minHeight)
+                    .padding(style.contentPadding),
                 contentAlignment = Alignment.CenterStart
             ) {
-                if (koastContent != null) {
-                    koastContent(koast)
+                val content = style.content ?: koastContent
+                if (content != null) {
+                    content(koast)
                 } else {
                     DefaultKoastContent(
                         koast = koast,
@@ -1019,6 +1087,8 @@ fun DefaultKoastContent(
     config: KoastyHostConfig,
     modifier: Modifier = Modifier
 ) {
+    val style = remember(koast.style, config) { config.resolve(koast.style) }
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -1032,7 +1102,7 @@ fun DefaultKoastContent(
                 text = koast.title,
                 style = MaterialTheme.typography
                     .titleMedium
-                    .merge(config.titleStyle)
+                    .merge(style.titleStyle)
             )
 
             if (!koast.message.isNullOrBlank()) {
@@ -1043,8 +1113,8 @@ fun DefaultKoastContent(
                     text = koast.message,
                     style = MaterialTheme.typography
                         .bodyMedium
-                        .merge(config.messageStyle),
-                    color = config.contentColor.copy(
+                        .merge(style.messageStyle),
+                    color = style.contentColor.copy(
                         alpha = 0.90f
                     )
                 )

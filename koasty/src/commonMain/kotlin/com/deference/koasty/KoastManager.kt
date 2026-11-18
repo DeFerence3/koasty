@@ -29,9 +29,9 @@ class KoastManager {
     /**
      * Normal timed koast.
      *
-     * Koasts are queued first in, first out. If another koast is already
-     * showing, this one waits until every koast queued before it has been
-     * dismissed.
+     * Koasts are queued first in, first out, in one lane per position.
+     * If another koast is already showing at the same position, this one
+     * waits until every koast queued there before it has been dismissed.
      *
      * By default,:
      * - disappears after [duration] once it reaches the front
@@ -42,6 +42,9 @@ class KoastManager {
      * replaces it in place: same queue position, same id, new content,
      * and its lifetime starts over. Without a match, or with a null key,
      * the koast is queued as usual. Every `show*` method takes a key.
+     * @param style overrides the host config for this koast only: colors,
+     * shape, position, gestures or the whole content. `null` uses the host
+     * config. Every `show*` method takes a style. See [KoastStyle].
      * @return the id of the queued koast, usable with [dismiss]. When a
      * keyed koast is replaced, the id stays the same.
      */
@@ -52,7 +55,8 @@ class KoastManager {
         dismissible: Boolean = true,
         dismissOnClick: Boolean = false,
         onClick: (() -> Unit)? = null,
-        key: String? = null
+        key: String? = null,
+        style: KoastStyle? = null
     ): Long {
         return publish(
             title = title,
@@ -61,7 +65,8 @@ class KoastManager {
             dismissible = dismissible,
             dismissOnClick = dismissOnClick,
             onClick = onClick,
-            key = key
+            key = key,
+            style = style
         )
     }
 
@@ -74,13 +79,15 @@ class KoastManager {
         title: String,
         message: String? = null,
         duration: Duration = DEFAULT_DURATION.milliseconds,
-        key: String? = null
+        key: String? = null,
+        style: KoastStyle? = null
     ): Long {
         return show(
             title = title,
             message = message,
             duration = duration,
-            key = key
+            key = key,
+            style = style
         )
     }
 
@@ -91,14 +98,16 @@ class KoastManager {
         title: String,
         message: String? = null,
         duration: Duration = DEFAULT_DURATION.milliseconds,
-        key: String? = null
+        key: String? = null,
+        style: KoastStyle? = null
     ): Long {
         return show(
             title = title,
             message = message,
             duration = duration,
             dismissible = true,
-            key = key
+            key = key,
+            style = style
         )
     }
 
@@ -111,14 +120,16 @@ class KoastManager {
         title: String,
         message: String? = null,
         duration: Duration = DEFAULT_DURATION.milliseconds,
-        key: String? = null
+        key: String? = null,
+        style: KoastStyle? = null
     ): Long {
         return show(
             title = title,
             message = message,
             duration = duration,
             dismissible = false,
-            key = key
+            key = key,
+            style = style
         )
     }
 
@@ -132,6 +143,7 @@ class KoastManager {
         dismissible: Boolean = true,
         dismissOnClick: Boolean = true,
         key: String? = null,
+        style: KoastStyle? = null,
         onClick: () -> Unit
     ): Long {
         return show(
@@ -141,7 +153,8 @@ class KoastManager {
             dismissible = dismissible,
             dismissOnClick = dismissOnClick,
             onClick = onClick,
-            key = key
+            key = key,
+            style = style
         )
     }
 
@@ -160,7 +173,8 @@ class KoastManager {
         dismissible: Boolean = true,
         dismissOnClick: Boolean = false,
         onClick: (() -> Unit)? = null,
-        key: String? = null
+        key: String? = null,
+        style: KoastStyle? = null
     ): Long {
         return publish(
             title = title,
@@ -169,7 +183,8 @@ class KoastManager {
             dismissible = dismissible,
             dismissOnClick = dismissOnClick,
             onClick = onClick,
-            key = key
+            key = key,
+            style = style
         )
     }
 
@@ -179,19 +194,21 @@ class KoastManager {
     fun showPersistent(
         title: String,
         message: String? = null,
-        key: String? = null
+        key: String? = null,
+        style: KoastStyle? = null
     ): Long {
         return showUntilDismissed(
             title = title,
             message = message,
             dismissible = false,
-            key = key
+            key = key,
+            style = style
         )
     }
 
     /**
-     * Dismiss the koast currently in front. The next queued koast,
-     * if any, takes its place.
+     * Dismiss the oldest koast. It is the front of its position's lane;
+     * the next koast queued at that position, if any, takes its place.
      */
     fun dismiss() {
         _state.update { old ->
@@ -259,7 +276,8 @@ class KoastManager {
         dismissible: Boolean,
         dismissOnClick: Boolean,
         onClick: (() -> Unit)?,
-        key: String?
+        key: String?,
+        style: KoastStyle?
     ): Long {
         var emittedId = 0L
 
@@ -272,7 +290,8 @@ class KoastManager {
                 dismissible = dismissible,
                 dismissOnClick = dismissOnClick,
                 onClick = onClick,
-                key = key
+                key = key,
+                style = style
             )
 
             val replaceIndex =

@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -102,6 +103,15 @@ private fun SettingsScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Show keyed koast")
+        }
+
+        Section("Per-koast styles")
+        val scope = rememberCoroutineScope()
+        val samples = remember(koastManager, scope) { styleSamples(koastManager, scope) }
+        samples.forEach { (label, action) ->
+            OutlinedButton(onClick = action, modifier = Modifier.fillMaxWidth()) {
+                Text(label)
+            }
         }
 
         Section("Display mode")

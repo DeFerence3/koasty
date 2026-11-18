@@ -13,5 +13,10 @@ data class KoastRequest internal constructor(
      * Set by `show*(key = ...)`. A later koast with the same key replaces
      * this one in place.
      */
-    val key: String? = null
+    val key: String? = null,
+    /**
+     * Set by `show*(style = ...)`. Overrides the host config for this
+     * koast only, including where it appears.
+     */
+    val style: KoastStyle? = null
 )
