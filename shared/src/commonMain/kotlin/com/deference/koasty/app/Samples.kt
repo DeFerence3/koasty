@@ -1,27 +1,35 @@
 package com.deference.koasty.app
 
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.deference.koasty.KoastDisplayMode
 import com.deference.koasty.KoastManager
 import com.deference.koasty.KoastPosition
 import com.deference.koasty.KoastRequest
+import com.deference.koasty.KoastStackHandleState
 import com.deference.koasty.KoastyHostConfig
 import kotlin.time.Duration.Companion.seconds
 
-internal enum class SampleStyle { Default, CustomConfig, Leading, CustomLayout }
+internal enum class SampleStyle { Default, Stacked, StackedCustomHandle, CustomConfig, Leading, CustomLayout }
 
 internal fun sampleConfig(style: SampleStyle): KoastyHostConfig = when (style) {
+	SampleStyle.Stacked, SampleStyle.StackedCustomHandle -> KoastyHostConfig(
+		displayMode = KoastDisplayMode.Stacked(maxVisible = 3),
+	)
 	SampleStyle.CustomConfig -> KoastyHostConfig(
 		position = KoastPosition.TOP_CENTER,
 		compact = true,
@@ -34,6 +42,7 @@ internal fun sampleConfig(style: SampleStyle): KoastyHostConfig = when (style) {
 		messageStyle = TextStyle(fontSize = 13.sp),
 		horizontalSwipeEnabled = true,
 		swipeUpEnabled = false,
+		displayMode = KoastDisplayMode.Stacked(maxVisible = 3),
 		enterAnimationSpec = tween(400),
 		exitAnimationSpec = tween(400),
 	)
@@ -46,10 +55,26 @@ internal fun SampleLeading(koast: KoastRequest) {
 }
 
 @Composable
+internal fun SampleStackHandle(state: KoastStackHandleState) {
+	Text(
+		text = if (state.expanded) "▲ collapse" else "▼ +${state.moreCount}",
+		fontWeight = FontWeight.Bold,
+		modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+	)
+}
+
+@Composable
 internal fun SampleLayout(koast: KoastRequest) {
-	Column(modifier = Modifier.padding(16.dp)) {
-		Text("★ ${koast.title}", color = Color.White, fontWeight = FontWeight.Bold)
-		koast.message?.let { Text(it, color = Color.White) }
+	Box(
+		modifier = Modifier
+			.fillMaxSize()
+			.padding(10.dp),
+		contentAlignment = Alignment.Center
+	) {
+		Column(modifier = Modifier.padding(16.dp)) {
+			Text("★ ${koast.title}", color = Color.White, fontWeight = FontWeight.Bold)
+			koast.message?.let { Text(it, color = Color.White) }
+		}
 	}
 }
 
@@ -107,13 +132,32 @@ internal fun getSamples(
 			onClick = {}
 		)
 	},
-	"Replace Koast" to {
-		koastManager.show("First", "Replaced by second koast")
-		koastManager.show("Second", "Newest koast wins")
+	"Queue Koasts" to {
+		koastManager.show("First", "Shown first")
+		koastManager.show("Second", "Waits until the first is gone")
+		koastManager.show("Third", "First in, first out")
+	},
+	"Dismiss All" to {
+		koastManager.dismissAll()
 	},
 	"Default Style" to {
 		setStyle(SampleStyle.Default)
 		koastManager.show("Default", "Default host config")
+	},
+	"Stacked Style" to {
+		setStyle(SampleStyle.Stacked)
+		koastManager.show("Stacked", "Queued koasts stack like cards")
+		koastManager.show("Next up", "Moves forward when the front one leaves")
+		koastManager.show("Third", "Last visible card")
+		koastManager.show("Fourth", "Waits off-screen until there is room")
+	},
+	"Stack 10" to {
+		setStyle(SampleStyle.Stacked)
+		repeat(10) { koastManager.show("Koast ${it + 1}", "Use the handle to expand the stack") }
+	},
+	"Custom Handle" to {
+		setStyle(SampleStyle.StackedCustomHandle)
+		repeat(5) { koastManager.show("Koast ${it + 1}", "Stack with a custom handle") }
 	},
 	"Custom Config" to {
 		setStyle(SampleStyle.CustomConfig)

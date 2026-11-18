@@ -21,11 +21,29 @@ class KoastManager {
         get() = currentKoast != null
 
     /**
+     * Every pending koast in FIFO order, starting with [currentKoast].
+     */
+    val queue: List<KoastRequest>
+        get() = _state.value.queue
+
+    /**
      * Normal timed koast.
      *
+     * Koasts are queued first in, first out. If another koast is already
+     * showing, this one waits until every koast queued before it has been
+     * dismissed.
+     *
      * By default,:
-     * - disappears after [duration]
+     * - disappears after [duration] once it reaches the front
      * - can be swiped away
+     *
+     * @param key identifies a koast that later calls can update. If a
+     * koast with the same key is still queued or showing, this one
+     * replaces it in place: same queue position, same id, new content,
+     * and its lifetime starts over. Without a match, or with a null key,
+     * the koast is queued as usual. Every `show*` method takes a key.
+     * @return the id of the queued koast, usable with [dismiss]. When a
+     * keyed koast is replaced, the id stays the same.
      */
     fun show(
         title: String,
@@ -33,7 +51,8 @@ class KoastManager {
         duration: Duration = DEFAULT_DURATION.milliseconds,
         dismissible: Boolean = true,
         dismissOnClick: Boolean = false,
-        onClick: (() -> Unit)? = null
+        onClick: (() -> Unit)? = null,
+        key: String? = null
     ): Long {
         return publish(
             title = title,
@@ -41,7 +60,8 @@ class KoastManager {
             lifetime = KoastLifetime.Timed(duration),
             dismissible = dismissible,
             dismissOnClick = dismissOnClick,
-            onClick = onClick
+            onClick = onClick,
+            key = key
         )
     }
 
@@ -53,12 +73,14 @@ class KoastManager {
     fun koast(
         title: String,
         message: String? = null,
-        duration: Duration = DEFAULT_DURATION.milliseconds
+        duration: Duration = DEFAULT_DURATION.milliseconds,
+        key: String? = null
     ): Long {
         return show(
             title = title,
             message = message,
-            duration = duration
+            duration = duration,
+            key = key
         )
     }
 
@@ -68,13 +90,15 @@ class KoastManager {
     fun showDismissible(
         title: String,
         message: String? = null,
-        duration: Duration = DEFAULT_DURATION.milliseconds
+        duration: Duration = DEFAULT_DURATION.milliseconds,
+        key: String? = null
     ): Long {
         return show(
             title = title,
             message = message,
             duration = duration,
-            dismissible = true
+            dismissible = true,
+            key = key
         )
     }
 
@@ -86,13 +110,15 @@ class KoastManager {
     fun showNonDismissible(
         title: String,
         message: String? = null,
-        duration: Duration = DEFAULT_DURATION.milliseconds
+        duration: Duration = DEFAULT_DURATION.milliseconds,
+        key: String? = null
     ): Long {
         return show(
             title = title,
             message = message,
             duration = duration,
-            dismissible = false
+            dismissible = false,
+            key = key
         )
     }
 
@@ -105,6 +131,7 @@ class KoastManager {
         duration: Duration = DEFAULT_DURATION.milliseconds,
         dismissible: Boolean = true,
         dismissOnClick: Boolean = true,
+        key: String? = null,
         onClick: () -> Unit
     ): Long {
         return show(
@@ -113,7 +140,8 @@ class KoastManager {
             duration = duration,
             dismissible = dismissible,
             dismissOnClick = dismissOnClick,
-            onClick = onClick
+            onClick = onClick,
+            key = key
         )
     }
 
@@ -131,7 +159,8 @@ class KoastManager {
         message: String? = null,
         dismissible: Boolean = true,
         dismissOnClick: Boolean = false,
-        onClick: (() -> Unit)? = null
+        onClick: (() -> Unit)? = null,
+        key: String? = null
     ): Long {
         return publish(
             title = title,
@@ -139,7 +168,8 @@ class KoastManager {
             lifetime = KoastLifetime.UntilDismissed,
             dismissible = dismissible,
             dismissOnClick = dismissOnClick,
-            onClick = onClick
+            onClick = onClick,
+            key = key
         )
     }
 
@@ -148,40 +178,77 @@ class KoastManager {
      */
     fun showPersistent(
         title: String,
-        message: String? = null
+        message: String? = null,
+        key: String? = null
     ): Long {
         return showUntilDismissed(
             title = title,
             message = message,
-            dismissible = false
+            dismissible = false,
+            key = key
         )
     }
 
     /**
-     * Dismiss whatever is currently visible.
+     * Dismiss the koast currently in front. The next queued koast,
+     * if any, takes its place.
      */
     fun dismiss() {
-        dismiss(id = null)
+        _state.update { old ->
+            if (old.queue.isEmpty()) old
+            else old.copy(queue = old.queue.drop(1))
+        }
     }
 
     /**
-     * Dismiss only if this exact koast is still visible.
+     * Dismiss the koast with this [id], whether it is in front or still
+     * waiting in the queue.
      *
-     * Useful for timers so an old timeout cannot accidentally
-     * dismiss a newer koast.
+     * Ids of koasts that were already dismissed are ignored, so an old
+     * timeout can never dismiss a newer koast.
+     *
+     * @return true if a koast was removed.
      */
-    internal fun dismiss(id: Long?) {
-        _state.update { old ->
-            val current = old.current
+    fun dismiss(id: Long): Boolean {
+        var removed = false
 
-            if (
-                current == null ||
-                (id != null && current.id != id)
-            ) {
-                old
-            } else {
-                old.copy(current = null)
-            }
+        _state.update { old ->
+            val remaining = old.queue.filterNot { it.id == id }
+            removed = remaining.size != old.queue.size
+
+            if (removed) old.copy(queue = remaining) else old
+        }
+
+        return removed
+    }
+
+    /**
+     * Dismiss [koast] only if the queue still holds this exact request.
+     *
+     * Used by the host's lifetime countdown: if a keyed koast was replaced
+     * while its timer was running, the replacement shares the id but is a
+     * different request, so the old timer leaves it alone.
+     */
+    internal fun dismiss(koast: KoastRequest): Boolean {
+        var removed = false
+
+        _state.update { old ->
+            val remaining = old.queue.filterNot { it === koast }
+            removed = remaining.size != old.queue.size
+
+            if (removed) old.copy(queue = remaining) else old
+        }
+
+        return removed
+    }
+
+    /**
+     * Dismiss the koast in front and clear everything queued behind it.
+     */
+    fun dismissAll() {
+        _state.update { old ->
+            if (old.queue.isEmpty()) old
+            else old.copy(queue = emptyList())
         }
     }
 
@@ -191,26 +258,46 @@ class KoastManager {
         lifetime: KoastLifetime,
         dismissible: Boolean,
         dismissOnClick: Boolean,
-        onClick: (() -> Unit)?
+        onClick: (() -> Unit)?,
+        key: String?
     ): Long {
         var emittedId = 0L
 
         _state.update { old ->
-            val id = old.sequence + 1L
-            emittedId = id
-
-            KoastManagerState(
-                sequence = id,
-                current = KoastRequest(
-                    id = id,
-                    title = title,
-                    message = message,
-                    lifetime = lifetime,
-                    dismissible = dismissible,
-                    dismissOnClick = dismissOnClick,
-                    onClick = onClick
-                )
+            fun request(id: Long) = KoastRequest(
+                id = id,
+                title = title,
+                message = message,
+                lifetime = lifetime,
+                dismissible = dismissible,
+                dismissOnClick = dismissOnClick,
+                onClick = onClick,
+                key = key
             )
+
+            val replaceIndex =
+                if (key == null) -1
+                else old.queue.indexOfFirst { it.key == key }
+
+            if (replaceIndex >= 0) {
+                // Same key: update in place, keeping position and id.
+                val id = old.queue[replaceIndex].id
+                emittedId = id
+
+                old.copy(
+                    queue = old.queue.toMutableList().apply {
+                        set(replaceIndex, request(id))
+                    }
+                )
+            } else {
+                val id = old.sequence + 1L
+                emittedId = id
+
+                KoastManagerState(
+                    sequence = id,
+                    queue = old.queue + request(id)
+                )
+            }
         }
 
         return emittedId

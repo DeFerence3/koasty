@@ -42,6 +42,27 @@ enum class KoastPosition {
     BOTTOM_END,
 }
 
+internal val KoastPosition.isTop: Boolean
+    get() = this == KoastPosition.TOP_START ||
+        this == KoastPosition.TOP_CENTER ||
+        this == KoastPosition.TOP_END
+
+internal fun KoastPosition.toAlignment(): Alignment = when (this) {
+    KoastPosition.TOP_START -> Alignment.TopStart
+    KoastPosition.TOP_CENTER -> Alignment.TopCenter
+    KoastPosition.TOP_END -> Alignment.TopEnd
+    KoastPosition.BOTTOM_START -> Alignment.BottomStart
+    KoastPosition.BOTTOM_CENTER -> Alignment.BottomCenter
+    KoastPosition.BOTTOM_END -> Alignment.BottomEnd
+}
+
+internal val KoastPosition.horizontalAlignment: Alignment.Horizontal
+    get() = when (this) {
+        KoastPosition.TOP_START, KoastPosition.BOTTOM_START -> Alignment.Start
+        KoastPosition.TOP_CENTER, KoastPosition.BOTTOM_CENTER -> Alignment.CenterHorizontally
+        KoastPosition.TOP_END, KoastPosition.BOTTOM_END -> Alignment.End
+    }
+
 internal fun defaultKoastPosition(): KoastPosition = when (getPlatform().platform) {
     Platforms.DESKTOP, Platforms.WEB -> KoastPosition.BOTTOM_END
     Platforms.ANDROID, Platforms.IOS -> KoastPosition.TOP_CENTER

@@ -5,9 +5,9 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
@@ -19,7 +19,14 @@ data class KoastyHostConfig(
     val position: KoastPosition = defaultKoastPosition(),
     val compact: Boolean = defaultCompactKoastLayout(),
     val maxWidth: Dp = 448.dp,
-    val edgePadding: Dp = 16.dp,
+    val edgePadding: Dp = 0.dp,
+
+    /**
+     * How queued koasts are presented: one at a time
+     * ([KoastDisplayMode.Sequential]), or stacked behind the front koast
+     * like cards ([KoastDisplayMode.Stacked]).
+     */
+    val displayMode: KoastDisplayMode = KoastDisplayMode.Sequential,
     val showCompactDismissButton: Boolean = true,
     val dismissButtonContainerColor: Color = Color(0xFFFFF1F1),
     val dismissButtonContentColor: Color = Color(0xFFE53935),
@@ -63,7 +70,20 @@ data class KoastyHostConfig(
     val settleAnimationSpec: FiniteAnimationSpec<Float> = spring(
         dampingRatio = Spring.DampingRatioMediumBouncy,
         stiffness = Spring.StiffnessMedium
-    )
+    ),
+
+    /**
+     * Expanding and collapsing a [KoastDisplayMode.Stacked] stack.
+     */
+    val expandAnimationSpec: FiniteAnimationSpec<Float> = spring(
+        dampingRatio = Spring.DampingRatioNoBouncy,
+        stiffness = Spring.StiffnessMediumLow
+    ),
+
+    /**
+     * whether koast should use safeDrawingPadding() or not
+     */
+    val respectSafeArea: Boolean = false
 ) {
     init {
         require(maxWidth > 0.dp)

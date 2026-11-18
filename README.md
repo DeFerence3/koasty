@@ -16,6 +16,7 @@ Koasty gives Compose Multiplatform applications a shared notification API across
 
 - One Compose API for Android, iOS, JVM desktop, JavaScript, and Wasm.
 - Timed, persistent, dismissible, and clickable notifications.
+- First-in, first-out queue, shown one at a time or stacked like cards.
 - Swipe-to-dismiss gestures and animated transitions.
 - Custom colors, typography, shape, padding, elevation, and animation specs.
 - Slots for a leading icon or a completely custom notification layout.
@@ -128,6 +129,83 @@ koastManager.showClickable(
     message = "Tap to view the release notes.",
     onClick = { openReleaseNotes() }
 )
+```
+
+## Queueing
+
+Unless you give them a key (see below), koasts never replace each other. Each call to `show` (or any other `show*` method) adds a koast to the back of a first-in, first-out queue. The koast at the front is the only one that counts down its duration and responds to swipes and clicks. When it is dismissed, the next koast takes its place.
+
+```kotlin
+koastManager.show("Uploading", "1 of 3")
+koastManager.show("Uploading", "2 of 3")   // waits for the first
+koastManager.show("Uploading", "3 of 3")   // waits for the second
+
+koastManager.dismiss()        // dismiss the koast in front
+koastManager.dismiss(id)      // dismiss a specific koast, even one still queued
+koastManager.dismissAll()     // clear the front koast and the whole queue
+
+koastManager.queue            // pending koasts, front first
+```
+
+Every `show*` method returns the koast's id. A persistent or until-dismissed koast keeps everything behind it waiting until you dismiss it.
+
+### Updating a koast with a key
+
+Pass a `key` to update a koast instead of queueing another one. If a koast with the same key is still showing or waiting, the new one replaces it in place: same queue position, same id, new content, and its duration starts over. Once the keyed koast is gone, the next call with that key queues a fresh one.
+
+```kotlin
+koastManager.showPersistent("Uploading", "0%", key = "upload")
+koastManager.showPersistent("Uploading", "40%", key = "upload")   // updates the same koast
+koastManager.show("Upload complete", key = "upload")              // replaces it, then times out
+```
+
+Every `show*` method accepts `key`. Koasts with different keys, or with no key, queue as usual.
+
+### Stacked cards
+
+By default the host shows one koast at a time (`KoastDisplayMode.Sequential`, which is a `Stacked` preset with `maxVisible = 1` and no peek, scale or expand handle). To layer queued koasts behind the front one like a deck of cards, use `KoastDisplayMode.Stacked`:
+
+```kotlin
+KoastyProvider(
+    koastManager = koastManager,
+    config = KoastyHostConfig(
+        displayMode = KoastDisplayMode.Stacked(
+            maxVisible = 3,       // cards drawn, including the front one
+            peekOffset = 10.dp,   // how far each card peeks out behind
+            scaleStep = 0.05f     // how much smaller each card behind is
+        )
+    )
+) {
+    AppContent()
+}
+```
+
+The queue order is the same in both modes. The front card is the oldest koast. When it leaves, the next card moves forward and the next queued koast joins at the back.
+
+#### Expanding the stack
+
+A stacked host shows a handle next to the stack whenever more than one koast is queued. Clicking it spreads the whole queue out as a scrollable list, and clicking it again collapses it back into a stack. The default handle reads "n more koasts", where n counts every queued koast behind the front one.
+
+While the stack is expanded:
+
+- the front koast's countdown is paused, and starts over when the stack collapses;
+- every card can be swiped sideways or clicked, which dismisses that specific koast;
+- vertical drags scroll the list.
+
+The stack collapses by itself once only one koast is left. Pass `expandable = false` to `KoastDisplayMode.Stacked` to hide the handle, and `expandedSpacing` to change the gap between cards in the list.
+
+Provide `stackHandle` to draw your own handle. Koasty makes it clickable for you; call `state.toggle()` if your handle has its own button:
+
+```kotlin
+KoastyProvider(
+    koastManager = koastManager,
+    config = KoastyHostConfig(displayMode = KoastDisplayMode.Stacked()),
+    stackHandle = { state ->
+        Text(if (state.expanded) "Collapse" else "+${state.moreCount}")
+    }
+) {
+    AppContent()
+}
 ```
 
 ## Customize the host
