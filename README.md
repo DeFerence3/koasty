@@ -9,6 +9,8 @@
 
 Koasty gives Compose Multiplatform applications a shared notification API across Android, iOS, desktop, and web. Show a short message from common code, let Koasty handle its lifetime and dismissal, and customize the visuals when your product needs a distinct style.
 
+Full documentation lives in [`docs/`](docs/index.mdx).
+
 > [!NOTE]
 > Koasty is in early development. The API may change before the first stable release. Feedback, bug reports, and contributions are welcome.
 
@@ -19,7 +21,8 @@ Koasty gives Compose Multiplatform applications a shared notification API across
 - First-in, first-out queue, shown one at a time or stacked like cards.
 - Swipe-to-dismiss gestures and animated transitions.
 - Custom colors, typography, shape, padding, elevation, and animation specs.
-- Slots for a leading icon or a completely custom notification layout.
+- Keyed koasts that update in place, for progress and status messages.
+- A slot for a completely custom notification layout.
 - Direct alert positioning with compact bottom-right defaults on desktop and web.
 - No platform UI code required at the call site.
 
@@ -228,20 +231,25 @@ KoastyProvider(
 }
 ```
 
-You can also provide leading content while retaining Koasty's standard layout and behavior:
+For complete visual control, pass `koastContent` and render the `KoastRequest` yourself. Koasty still draws the container and handles position, gestures and animations. To add a leading icon while keeping the standard title and message, combine your content with `DefaultKoastContent`:
 
 ```kotlin
+val config = KoastyHostConfig()
+
 KoastyProvider(
     koastManager = koastManager,
-    leadingContent = { koast ->
-        Text(text = "●")
+    config = config,
+    koastContent = { koast ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Notifications, contentDescription = null)
+            Spacer(Modifier.width(12.dp))
+            DefaultKoastContent(koast = koast, config = config, modifier = Modifier.weight(1f))
+        }
     }
 ) {
     AppContent()
 }
 ```
-
-For complete visual control, pass `koastContent` and render the current `KoastRequest` yourself.
 
 ## Run the sample applications
 
@@ -282,13 +290,14 @@ androidApp/  Android sample entry point
 desktopApp/  Desktop sample entry point
 webApp/      JavaScript and Wasm sample entry points
 iosApp/      iOS sample entry point
+docs/        Documentation site (Docs7)
 ```
 
 ## Contributing
 
 Contributions of all sizes are welcome.
 
-1. Fork the repository and create a branch from `main`.
+1. Fork the repository and create a branch from `master`.
 2. Keep changes focused and include tests when behavior changes.
 3. Run the relevant Gradle build and tests locally.
 4. Open a pull request describing the problem and your approach.
