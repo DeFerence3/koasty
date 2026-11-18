@@ -1,0 +1,104 @@
+---
+title: "Customization"
+description: "Adapt position, size, colors, gestures and layout with KoastyHostConfig."
+---
+
+## Host config
+
+Pass a `KoastyHostConfig` to `KoastyProvider`:
+
+```kotlin
+KoastyProvider(
+    koastManager = koastManager,
+    config = KoastyHostConfig(
+        position = KoastPosition.BOTTOM_CENTER,
+        containerColor = MaterialTheme.colorScheme.inverseSurface,
+        contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+        shape = RoundedCornerShape(16.dp),
+        shadowElevation = 12.dp,
+        respectSafeArea = true
+    )
+) {
+    AppContent()
+}
+```
+
+### Placement and layout
+
+| Property | Description |
+| --- | --- |
+| `position` | One of `TOP_START`, `TOP_CENTER`, `TOP_END`, `BOTTOM_START`, `BOTTOM_CENTER`, `BOTTOM_END`. Defaults to `TOP_CENTER` on mobile and `BOTTOM_END` on desktop and web. |
+| `compact` | A floating card limited to `maxWidth` instead of a full-width banner. On by default on desktop and web. |
+| `maxWidth` | Widest a compact koast can be. Default `448.dp`. |
+| `minHeight` | Minimum koast height. |
+| `edgePadding` | Space between the koast and the screen edge. Default `0.dp`. |
+| `respectSafeArea` | Keep koasts clear of system bars and cutouts. Default `false`. |
+| `displayMode` | `Sequential` or `Stacked`. See [display modes](/display-modes). |
+
+### Appearance
+
+| Property | Description |
+| --- | --- |
+| `containerColor`, `contentColor` | Background and text colors. |
+| `shape` | Koast shape. |
+| `shadowElevation` | Shadow depth. Default `8.dp`. |
+| `contentPadding` | Padding inside the koast. Default `20.dp`. |
+| `titleStyle`, `messageStyle` | Text styles, merged over the Material typography. |
+
+### Gestures
+
+| Property | Description |
+| --- | --- |
+| `horizontalSwipeEnabled` | Swipe sideways to dismiss. Default `true`. |
+| `swipeUpEnabled` | Swipe up to dismiss. Default `true`. |
+| `horizontalDismissThresholdFraction` | Share of the width to swipe before dismissing. Default `0.28`. |
+| `upDismissThresholdFraction` | Share of the height to swipe up before dismissing. Default `0.25`. |
+
+### Animations
+
+| Property | Description |
+| --- | --- |
+| `enterAnimationSpec` | How a koast slides in. |
+| `exitAnimationSpec` | How a koast leaves. |
+| `settleAnimationSpec` | How a koast springs back after a short swipe, and how stacked cards move forward. |
+| `expandAnimationSpec` | Expanding and collapsing a stack. |
+
+## Custom content
+
+Pass `koastContent` to draw the inside of every koast yourself. Koasty still draws the container, and handles position, gestures and animations.
+
+```kotlin
+KoastyProvider(
+    koastManager = koastManager,
+    koastContent = { koast ->
+        Column {
+            Text(koast.title, fontWeight = FontWeight.Bold)
+            koast.message?.let { Text(it) }
+        }
+    }
+) {
+    AppContent()
+}
+```
+
+To add something like a leading icon while keeping the standard title and message, combine your content with `DefaultKoastContent`:
+
+```kotlin
+val config = KoastyHostConfig()
+
+KoastyProvider(
+    koastManager = koastManager,
+    config = config,
+    koastContent = { koast ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Notifications, contentDescription = null)
+            Spacer(Modifier.width(12.dp))
+            DefaultKoastContent(koast = koast, config = config, modifier = Modifier.weight(1f))
+        }
+    }
+) {
+    AppContent()
+}
+```
+
+`KoastRequest` gives you the koast's `id`, `title`, `message`, `lifetime`, `key` and click settings.

@@ -1,0 +1,37 @@
+---
+title: "Introduction"
+description: "Lightweight, customizable toast-style notifications for Compose Multiplatform."
+---
+
+Koasty gives Compose Multiplatform applications one notification API across Android, iOS, desktop and web. Show a short message from common code, let Koasty handle its lifetime and dismissal, and customize the visuals when your product needs its own style.
+
+> Koasty is in early development. The API may change before the first stable release.
+
+## Features
+
+- One Compose API for Android, iOS, JVM desktop, JavaScript and Wasm.
+- Timed, persistent, dismissible and clickable notifications.
+- A first-in, first-out queue, shown one at a time or stacked like cards.
+- Keyed koasts that update in place instead of queueing, for progress and status messages.
+- Swipe-to-dismiss gestures and animated enter and exit transitions.
+- Custom colors, typography, shape, padding, elevation and animation specs.
+- A slot for a completely custom notification layout.
+- No platform UI code at the call site.
+
+## Supported targets
+
+| Platform | Target |
+| --- | --- |
+| Android | `android` |
+| iOS devices | `iosArm64` |
+| iOS Simulator on Apple Silicon | `iosSimulatorArm64` |
+| Desktop | `jvm` |
+| Web | `js` and `wasmJs` |
+
+## Core concepts
+
+- **`KoastManager`** holds the queue. You call `show*` and `dismiss*` on it from anywhere in your UI code.
+- **`KoastyProvider`** wraps your app content and draws the koasts above it.
+- **`KoastyHostConfig`** controls how koasts look and behave: position, size, colors, gestures, animations and display mode.
+
+Next, [install Koasty](/installation) and follow the [quick start](/quickstart).

@@ -1,0 +1,40 @@
+---
+title: "Installation"
+description: "Add Koasty to a Compose Multiplatform project."
+---
+
+## From Maven Central
+
+Add Koasty to your shared module's `commonMain` dependencies:
+
+```kotlin
+kotlin {
+    sourceSets {
+        commonMain.dependencies {
+            implementation("io.github.deference3:koasty:0.0.1")
+        }
+    }
+}
+```
+
+## As a project dependency
+
+If that version isn't published yet, include the `koasty` module from this repository while developing locally:
+
+```kotlin
+// settings.gradle.kts
+include(":koasty")
+```
+
+```kotlin
+// Your Compose Multiplatform module
+kotlin {
+    sourceSets {
+        commonMain.dependencies {
+            implementation(project(":koasty"))
+        }
+    }
+}
+```
+
+Koasty is a Compose Multiplatform library, so your module also needs the Compose Multiplatform and Compose compiler plugins.

@@ -1,0 +1,58 @@
+---
+title: "Contributing"
+description: "Run the samples, build the library and contribute changes."
+---
+
+## Run the sample apps
+
+Clone the repository and use the Gradle wrapper:
+
+```shell
+# Android
+./gradlew :androidApp:assembleDebug
+
+# Desktop
+./gradlew :desktopApp:run
+
+# Web (Wasm)
+./gradlew :webApp:wasmJsBrowserDevelopmentRun
+
+# Web (JavaScript)
+./gradlew :webApp:jsBrowserDevelopmentRun
+```
+
+For iOS, open `iosApp/iosApp.xcodeproj` in Xcode and run the app from there. On Windows, replace `./gradlew` with `gradlew.bat`.
+
+## Build and test the library
+
+```shell
+./gradlew :koasty:build
+./gradlew :koasty:jvmTest
+```
+
+Native Apple binaries must be built on macOS.
+
+## Project structure
+
+```text
+koasty/      Compose Multiplatform library
+shared/      Shared UI for the sample apps
+androidApp/  Android sample entry point
+desktopApp/  Desktop sample entry point
+webApp/      JavaScript and Wasm sample entry points
+iosApp/      iOS sample entry point
+docs/        This documentation
+```
+
+## Contributing changes
+
+1. Fork the repository and create a branch from `master`.
+2. Keep changes focused, and add tests when behavior changes.
+3. Run the relevant Gradle build and tests locally.
+4. Open a pull request describing the problem and your approach.
+
+For larger API or behavior changes, open an issue first so the design can be discussed before implementation.
+
+## License
+
+Koasty is distributed under the Apache License 2.0.

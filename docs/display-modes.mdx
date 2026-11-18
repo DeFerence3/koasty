@@ -1,0 +1,80 @@
+---
+title: "Display modes"
+description: "Show one koast at a time, or stack queued koasts like cards."
+---
+
+`KoastyHostConfig.displayMode` controls how the queue is drawn. The queue order is the same in every mode.
+
+## Sequential (default)
+
+`KoastDisplayMode.Sequential` shows one koast at a time. Koasts behind the front one are hidden. When the front koast leaves, the next one appears in its place.
+
+`Sequential` is a preset of `Stacked`:
+
+```kotlin
+KoastDisplayMode.Stacked(
+    maxVisible = 1,
+    peekOffset = 0.dp,
+    scaleStep = 0f,
+    expandable = false
+)
+```
+
+## Stacked
+
+`KoastDisplayMode.Stacked` layers queued koasts behind the front one like a deck of cards:
+
+```kotlin
+KoastyProvider(
+    koastManager = koastManager,
+    config = KoastyHostConfig(
+        displayMode = KoastDisplayMode.Stacked(
+            maxVisible = 3,       // cards drawn, including the front one
+            peekOffset = 10.dp,   // how far each card peeks out behind
+            scaleStep = 0.05f     // how much smaller each card behind is
+        )
+    )
+) {
+    AppContent()
+}
+```
+
+The front card is the oldest koast. When it leaves, the next card moves forward. While you swipe the front card, the cards behind follow your finger. Koasts beyond `maxVisible` wait without being drawn.
+
+| Parameter | Default | Description |
+| --- | --- | --- |
+| `maxVisible` | `4` | Cards drawn, including the front one. |
+| `peekOffset` | `10.dp` | How far each card behind peeks out. |
+| `scaleStep` | `0.05f` | How much smaller each card behind is drawn. |
+| `expandable` | `true` | Whether a handle is shown to expand the stack. |
+| `expandedSpacing` | `8.dp` | Gap between cards while expanded. |
+
+## Expanding the stack
+
+A stacked host shows a handle next to the stack whenever more than one koast is queued. Clicking it spreads the whole queue out as a scrollable list, and clicking it again collapses it. The default handle reads "n more koasts".
+
+While the stack is expanded:
+
+- the front koast's countdown is paused, and starts over when the stack collapses;
+- every card can be swiped sideways or clicked, which dismisses that koast;
+- vertical drags scroll the list.
+
+The stack collapses by itself once only one koast is left. Pass `expandable = false` to hide the handle.
+
+## Custom handle
+
+Pass `stackHandle` to draw your own handle. Koasty makes it clickable for you; call `state.toggle()` if your handle has its own button.
+
+```kotlin
+KoastyProvider(
+    koastManager = koastManager,
+    config = KoastyHostConfig(displayMode = KoastDisplayMode.Stacked()),
+    stackHandle = { state ->
+        Text(if (state.expanded) "Collapse" else "+${state.moreCount}")
+    }
+) {
+    AppContent()
+}
+```
+
+`KoastStackHandleState` gives you `moreCount` (koasts behind the front one), `expanded`, and `toggle()`.

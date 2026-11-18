@@ -1,0 +1,79 @@
+---
+title: "Lifetimes"
+description: "Timed, until-dismissed, persistent and clickable koasts."
+---
+
+`KoastManager` has a method for each common behavior. Every `show*` method returns the koast's id.
+
+## Timed
+
+```kotlin
+// Disappears after 3.5 seconds by default.
+koastManager.show("Uploaded", "Your image is now available.")
+
+// Custom duration, as a kotlin.time.Duration.
+koastManager.show(
+    title = "Connected",
+    duration = 5.seconds
+)
+
+// Short alias for show().
+koastManager.koast("Copied")
+```
+
+The countdown only runs while a koast is at the front of the queue.
+
+## Dismissible or not
+
+```kotlin
+// Can be swiped away (the default for show()).
+koastManager.showDismissible("Dismissible", "Swipe me away")
+
+// Can't be swiped; still disappears after its duration.
+koastManager.showNonDismissible("Syncing", "This only takes a moment")
+```
+
+## Until dismissed
+
+```kotlin
+// Stays until swiped away or dismissed in code.
+koastManager.showUntilDismissed(
+    title = "You're offline",
+    message = "Some features may be unavailable."
+)
+
+// Stays until dismissed in code; can't be swiped.
+koastManager.showPersistent(
+    title = "Uploading",
+    message = "Please keep the app open."
+)
+```
+
+A koast without a timeout keeps every koast behind it waiting until you dismiss it.
+
+## Clickable
+
+```kotlin
+koastManager.showClickable(
+    title = "Update available",
+    message = "Tap to view the release notes.",
+    onClick = { openReleaseNotes() }
+)
+
+// Keep the koast open after the click.
+koastManager.showClickable(
+    title = "Stay open",
+    dismissOnClick = false,
+    onClick = { }
+)
+```
+
+## Dismissing in code
+
+```kotlin
+koastManager.dismiss()        // the koast in front
+koastManager.dismiss(id)      // a specific koast, even one still queued
+koastManager.dismissAll()     // the front koast and the whole queue
+```
+
+`dismiss(id)` ignores ids of koasts that are already gone, so an old reference can never remove a newer koast. A dismissed koast plays its exit animation before it disappears.

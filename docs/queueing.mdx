@@ -1,0 +1,38 @@
+---
+title: "Queueing"
+description: "How koasts wait their turn, and how keys update a koast in place."
+---
+
+## First in, first out
+
+Each `show*` call adds a koast to the back of a queue. The koast at the front is the only one that counts down its duration and responds to swipes and clicks. When it leaves, the next koast takes its place.
+
+```kotlin
+koastManager.show("Uploading", "1 of 3")
+koastManager.show("Uploading", "2 of 3")   // waits for the first
+koastManager.show("Uploading", "3 of 3")   // waits for the second
+
+koastManager.queue            // pending koasts, front first
+koastManager.currentKoast     // the koast in front, or null
+koastManager.isShowing        // whether anything is queued
+```
+
+How the waiting koasts are drawn depends on the [display mode](/display-modes).
+
+## Updating a koast with a key
+
+Pass a `key` to update a koast instead of queueing another one. If a koast with the same key is still showing or waiting, the new one replaces it in place:
+
+- it keeps the same queue position and the same id;
+- its title, message, lifetime and click behavior come from the new call;
+- its duration starts over.
+
+```kotlin
+koastManager.showPersistent("Uploading", "0%", key = "upload")
+koastManager.showPersistent("Uploading", "40%", key = "upload")   // updates the same koast
+koastManager.show("Upload complete", key = "upload")              // replaces it, then times out
+```
+
+A koast on screen updates its text without leaving and coming back, which suits progress and status messages.
+
+Every `show*` method accepts `key`. Koasts with different keys, or with no key, queue as usual. Once a keyed koast is gone, the next call with that key queues a fresh koast with a new id.

@@ -1,0 +1,52 @@
+---
+title: "Quick start"
+description: "Show your first koast in a few lines of common code."
+---
+
+Create and remember one `KoastManager`, then place `KoastyProvider` around your app content. The provider draws koasts above its content.
+
+```kotlin
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import com.deference.koasty.KoastManager
+import com.deference.koasty.KoastyProvider
+
+@Composable
+fun App() {
+    val koastManager = remember { KoastManager() }
+
+    KoastyProvider(koastManager = koastManager) {
+        Button(
+            onClick = {
+                koastManager.show(
+                    title = "Saved",
+                    message = "Your changes are ready."
+                )
+            }
+        ) {
+            Text("Show koast")
+        }
+    }
+}
+```
+
+The koast slides in, stays for 3.5 seconds, and slides out. The user can swipe it away sideways or upward before then.
+
+## Defaults per platform
+
+Koasty picks a layout that suits each platform:
+
+| Platform | Position | Layout |
+| --- | --- | --- |
+| Android, iOS | `TOP_CENTER` | Full-width banner |
+| Desktop, web | `BOTTOM_END` | Compact floating card |
+
+Change either with [`KoastyHostConfig`](/customization).
+
+## Next steps
+
+- [Lifetimes](/lifetimes): timed, persistent and clickable koasts.
+- [Queueing](/queueing): what happens when you show several koasts, and how keys update one in place.
+- [Display modes](/display-modes): one at a time, or stacked like cards.

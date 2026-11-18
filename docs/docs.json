@@ -1,0 +1,27 @@
+{
+  "$schema": "https://context7.com/schema/docs7.json",
+  "name": "Koasty",
+  "colors": {
+    "primary": "#0F9E96"
+  },
+  "navigation": {
+    "groups": [
+      {
+        "group": "Get started",
+        "pages": ["index", "installation", "quickstart"]
+      },
+      {
+        "group": "Showing koasts",
+        "pages": ["lifetimes", "queueing", "display-modes"]
+      },
+      {
+        "group": "Customization",
+        "pages": ["customization"]
+      },
+      {
+        "group": "Project",
+        "pages": ["contributing"]
+      }
+    ]
+  }
+}
