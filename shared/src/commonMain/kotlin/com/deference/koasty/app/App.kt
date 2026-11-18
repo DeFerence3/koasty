@@ -13,6 +13,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
@@ -88,6 +89,19 @@ private fun SettingsScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Show koast")
+        }
+
+        var progress by remember { mutableIntStateOf(0) }
+        OutlinedButton(
+            onClick = {
+                progress = (progress + 20).coerceAtMost(100)
+                val title = if (progress < 100) "Uploading $progress%" else "Upload done"
+                koastManager.show(title, "Same key, so it updates in place", key = "upload")
+                if (progress == 100) progress = 0
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Show keyed koast")
         }
 
         Section("Display mode")

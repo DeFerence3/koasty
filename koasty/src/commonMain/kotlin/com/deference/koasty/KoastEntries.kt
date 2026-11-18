@@ -4,7 +4,10 @@ package com.deference.koasty
  * A koast the host is drawing. It stays drawn while it animates out,
  * after the manager has already removed it from the queue.
  */
-internal class KoastEntry(val koast: KoastRequest) {
+internal class KoastEntry(koast: KoastRequest) {
+    // The latest request for this id; a keyed koast can be replaced in place.
+    var koast: KoastRequest = koast
+
     var exiting: Boolean = false
 
     // Position among the queued (non-exiting) koasts at the last sync.
@@ -33,17 +36,23 @@ internal class KoastEntries {
      * order (queue order, with exiting koasts kept where they were).
      *
      * - A koast new to the queue gets a fresh entry at the end.
+     * - A koast replaced by key (same id, new request) keeps its entry,
+     *   which picks up the new request.
      * - A koast that left the queue is marked exiting, remembering the
      *   stack position it had, and stays until [remove] is called.
      */
     fun sync(queue: List<KoastRequest>): List<KoastEntry> {
-        val queuedIds = queue.mapTo(HashSet(queue.size)) { it.id }
+        val queued = queue.associateBy { it.id }
         val knownIds = entries.mapTo(HashSet(entries.size)) { it.koast.id }
 
         for (entry in entries) {
-            if (!entry.exiting && entry.koast.id !in queuedIds) {
+            if (entry.exiting) continue
+            val latest = queued[entry.koast.id]
+            if (latest == null) {
                 entry.exiting = true
                 entry.exitIndex = entry.activeIndex
+            } else {
+                entry.koast = latest
             }
         }
 

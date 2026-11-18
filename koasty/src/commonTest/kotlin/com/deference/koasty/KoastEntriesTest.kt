@@ -116,4 +116,19 @@ class KoastEntriesTest {
         assertFalse(drawn[1].exiting)
         assertEquals(0, drawn[1].activeIndex)
     }
+
+    @Test
+    fun sync_keyedReplacementUpdatesEntryInPlace() {
+        val manager = KoastManager()
+        val entries = KoastEntries()
+        manager.show("Uploading 40%", key = "upload")
+        val before = entries.sync(manager.queue).single()
+
+        manager.show("Uploading 80%", key = "upload")
+        val after = entries.sync(manager.queue).single()
+
+        assertTrue(before === after)
+        assertFalse(after.exiting)
+        assertEquals("Uploading 80%", after.koast.title)
+    }
 }

@@ -425,15 +425,17 @@ private fun KoastCard(
     }
     /*
      * Paused while the stack is expanded; collapsing starts the
-     * full duration again.
+     * full duration again. Replacing a keyed koast hands in a new
+     * request, which restarts the countdown, and only dismisses the
+     * exact request it was started for.
      */
-    LaunchedEffect(isFront, expanded) {
+    LaunchedEffect(isFront, expanded, koast) {
         if (!isFront || expanded) return@LaunchedEffect
         val lifetime = koast.lifetime as? KoastLifetime.Timed ?: return@LaunchedEffect
 
         snapshotFlow { entered }.first { it }
         delay(lifetime.millis)
-        koastManager.dismiss(koast.id)
+        koastManager.dismiss(koast)
     }
 
     LaunchedEffect(isFront, measuredSize.height) {

@@ -133,7 +133,7 @@ koastManager.showClickable(
 
 ## Queueing
 
-Koasts never replace each other. Each call to `show` (or any other `show*` method) adds a koast to the back of a first-in, first-out queue. The koast at the front is the only one that counts down its duration and responds to swipes and clicks. When it is dismissed, the next koast takes its place.
+Unless you give them a key (see below), koasts never replace each other. Each call to `show` (or any other `show*` method) adds a koast to the back of a first-in, first-out queue. The koast at the front is the only one that counts down its duration and responds to swipes and clicks. When it is dismissed, the next koast takes its place.
 
 ```kotlin
 koastManager.show("Uploading", "1 of 3")
@@ -148,6 +148,18 @@ koastManager.queue            // pending koasts, front first
 ```
 
 Every `show*` method returns the koast's id. A persistent or until-dismissed koast keeps everything behind it waiting until you dismiss it.
+
+### Updating a koast with a key
+
+Pass a `key` to update a koast instead of queueing another one. If a koast with the same key is still showing or waiting, the new one replaces it in place: same queue position, same id, new content, and its duration starts over. Once the keyed koast is gone, the next call with that key queues a fresh one.
+
+```kotlin
+koastManager.showPersistent("Uploading", "0%", key = "upload")
+koastManager.showPersistent("Uploading", "40%", key = "upload")   // updates the same koast
+koastManager.show("Upload complete", key = "upload")              // replaces it, then times out
+```
+
+Every `show*` method accepts `key`. Koasts with different keys, or with no key, queue as usual.
 
 ### Stacked cards
 
