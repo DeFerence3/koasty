@@ -42,25 +42,7 @@ Koasty is configured for publication under:
 
 ```kotlin
 commonMain.dependencies {
-    implementation("io.github.deference3:koasty:0.0.1")
-}
-```
-
-If that version has not yet been published to Maven Central, include this repository as a project dependency while developing locally:
-
-```kotlin
-// settings.gradle.kts
-include(":koasty")
-```
-
-```kotlin
-// Your Compose Multiplatform module
-kotlin {
-    sourceSets {
-        commonMain.dependencies {
-            implementation(project(":koasty"))
-        }
-    }
+    implementation("io.github.deference3:koasty:0.1.0")
 }
 ```
 

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "Koasty",
+  "description": "A lightweight, customizable toast-style notification library for Compose Multiplatform (Android, iOS, desktop, web): timed, persistent and clickable koasts, a FIFO queue, stacked cards, keyed in-place updates and swipe-to-dismiss.",
+  "folders": ["docs"],
+  "excludeFolders": ["**/build"],
+  "rules": [
+    "Create one KoastManager per screen or app, remember it, and wrap content in KoastyProvider",
+    "Call show* methods from event handlers, not during composition",
+    "Use the key parameter to update an existing koast in place instead of queueing a new one",
+    "Configure position, colors, gestures and display mode through KoastyHostConfig"
+  ]
+}
