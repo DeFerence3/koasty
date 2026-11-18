@@ -93,12 +93,12 @@ private fun SettingsScreen(
         Section("Display mode")
         RadioRow(
             label = "Sequential",
-            selected = config.displayMode is KoastDisplayMode.Sequential,
+            selected = config.displayMode == KoastDisplayMode.Sequential,
             onClick = { onAction(AppAction.DisplayMode(KoastDisplayMode.Sequential)) }
         )
         RadioRow(
             label = "Stacked",
-            selected = config.displayMode is KoastDisplayMode.Stacked,
+            selected = config.displayMode != KoastDisplayMode.Sequential,
             onClick = { onAction(AppAction.DisplayMode(KoastDisplayMode.Stacked())) }
         )
 

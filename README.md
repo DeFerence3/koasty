@@ -151,7 +151,7 @@ Every `show*` method returns the koast's id. A persistent or until-dismissed koa
 
 ### Stacked cards
 
-By default the host shows one koast at a time (`KoastDisplayMode.Sequential`). To layer queued koasts behind the front one like a deck of cards, use `KoastDisplayMode.Stacked`:
+By default the host shows one koast at a time (`KoastDisplayMode.Sequential`, which is a `Stacked` preset with `maxVisible = 1` and no peek, scale or expand handle). To layer queued koasts behind the front one like a deck of cards, use `KoastDisplayMode.Stacked`:
 
 ```kotlin
 KoastyProvider(

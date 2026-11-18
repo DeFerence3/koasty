@@ -22,8 +22,9 @@ data class KoastyHostConfig(
     val edgePadding: Dp = 0.dp,
 
     /**
-     * How queued koasts are presented: one at a time, or stacked
-     * behind the front koast like cards.
+     * How queued koasts are presented: one at a time
+     * ([KoastDisplayMode.Sequential]), or stacked behind the front koast
+     * like cards ([KoastDisplayMode.Stacked]).
      */
     val displayMode: KoastDisplayMode = KoastDisplayMode.Sequential,
     val showCompactDismissButton: Boolean = true,

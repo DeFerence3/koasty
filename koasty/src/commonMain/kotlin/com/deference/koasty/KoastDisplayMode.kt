@@ -13,12 +13,6 @@ import androidx.compose.ui.unit.dp
 sealed interface KoastDisplayMode {
 
     /**
-     * One koast at a time. The next queued koast enters after the
-     * current one has finished animating out.
-     */
-    data object Sequential : KoastDisplayMode
-
-    /**
      * Queued koasts are layered behind the front koast like a deck of
      * cards. When the front koast leaves, the next card moves forward.
      *
@@ -45,5 +39,19 @@ sealed interface KoastDisplayMode {
             require(scaleStep in 0f..<1f)
             require(expandedSpacing >= 0.dp)
         }
+    }
+
+    companion object {
+        /**
+         * One koast at a time: a [Stacked] stack with every stack effect
+         * turned off. Only the front koast is drawn; the next one stays
+         * hidden behind it and fades in as the front koast leaves.
+         */
+        val Sequential: Stacked = Stacked(
+            maxVisible = 1,
+            peekOffset = 0.dp,
+            scaleStep = 0f,
+            expandable = false
+        )
     }
 }

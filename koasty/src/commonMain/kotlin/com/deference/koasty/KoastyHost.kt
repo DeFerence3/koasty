@@ -79,7 +79,9 @@ fun KoastyHost(
     stackHandle: (@Composable (KoastStackHandleState) -> Unit)? = null
 ) {
     val managerState by koastManager.state.collectAsState()
-    val stacked = config.displayMode as? KoastDisplayMode.Stacked
+    val stacked: KoastDisplayMode.Stacked = when (val mode = config.displayMode) {
+        is KoastDisplayMode.Stacked -> mode
+    }
     val queueSize = managerState.queue.size
 
     /*
@@ -102,7 +104,7 @@ fun KoastyHost(
         }
     }
 
-    val canExpand = stacked != null && stacked.expandable
+    val canExpand = stacked.expandable
 
     // Nothing left to spread out, or stacking was switched off.
     LaunchedEffect(queueSize <= 1 || !canExpand) {
@@ -147,12 +149,12 @@ fun KoastyHost(
      * While collapsed, leave room past the front card for the cards
      * peeking out behind it, so the handle sits beyond them.
      */
-    val reservedPeekPx = if (stacked == null) 0 else with(density) {
+    val reservedPeekPx = with(density) {
         stacked.peekOffset.roundToPx() *
                 (minOf(queueSize, stacked.maxVisible) - 1).coerceAtLeast(0)
     }
     val spacingPx = with(density) {
-        (stacked?.expandedSpacing ?: 0.dp).roundToPx()
+        stacked.expandedSpacing.roundToPx()
     }
 
     // Scroll only once the cards start spreading out; while stacked,
@@ -312,7 +314,7 @@ private fun KoastCard(
     koast: KoastRequest,
     exiting: Boolean,
     stackIndex: Int,
-    stacked: KoastDisplayMode.Stacked?,
+    stacked: KoastDisplayMode.Stacked,
     expanded: Boolean,
     expandProgress: () -> Float,
     stackHeightPx: () -> Float,
@@ -851,10 +853,9 @@ private fun KoastCard(
      * 0 = stacked, 1 = spread out as a list. Every stack effect below
      * (pull, scale, peek, squeezed height, hidden depth) fades out with it.
      */
-    val listProgress = if (stacked == null) 0f else expandProgress().coerceIn(0f, 1f)
+    val listProgress = expandProgress().coerceIn(0f, 1f)
 
-    val pull =
-        if (stacked != null && !exiting && stackIndex > 0) frontSwipeProgress() * (1f - listProgress)
+    val pull = if (!exiting && stackIndex > 0) frontSwipeProgress() * (1f - listProgress)
         else 0f
 
     val lastVisualIndex = remember { LastVisualIndex(stackIndex - pull) }
@@ -880,31 +881,24 @@ private fun KoastCard(
      * Cards past maxVisible wait at the last visible slot, invisible,
      * and fade in as they move forward (or as the stack expands).
      */
-    val lastSlot = ((stacked?.maxVisible ?: 1) - 1).toFloat()
+    val lastSlot = (stacked.maxVisible - 1).toFloat()
     val stackDepth = visualIndex.coerceIn(0f, lastSlot)
 
-    val stackAlpha =
-        if (stacked == null) 1f
-        else lerp(
-            (stacked.maxVisible - visualIndex).coerceIn(0f, 1f),
-            1f,
-            listProgress
-        )
+    val stackAlpha = lerp(
+        (stacked.maxVisible - visualIndex).coerceIn(0f, 1f),
+        1f,
+        listProgress
+    )
 
-    val stackScale =
-        if (stacked == null) 1f
-        else lerp(
-            (1f - stackDepth * stacked.scaleStep).coerceAtLeast(0f),
-            1f,
-            listProgress
-        )
+    val stackScale = lerp(
+        (1f - stackDepth * stacked.scaleStep).coerceAtLeast(0f),
+        1f,
+        listProgress
+    )
 
-    val stackOffsetY = if (stacked == null) {
-            0f
-        } else {
-            with(density) { stacked.peekOffset.toPx() } * stackDepth * (if (entersFromTop) 1f else -1f) *
-                    (1f - listProgress)
-        }
+    val stackOffsetY =
+        with(density) { stacked.peekOffset.toPx() } * stackDepth * (if (entersFromTop) 1f else -1f) *
+                (1f - listProgress)
 
     /*
      * While fully expanded, a card whose list slot moves (because a koast
@@ -920,7 +914,7 @@ private fun KoastCard(
      */
     val forcedHeight: Dp? = run {
         val stackHeight = stackHeightPx()
-        if (stacked == null || stackHeight <= 0f || stackDepth <= 0.001f) {
+        if (stackHeight <= 0f || stackDepth <= 0.001f) {
             return@run null
         }
 
