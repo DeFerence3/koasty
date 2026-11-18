@@ -130,7 +130,7 @@ dependencies {
 mavenPublishing {
     publishToMavenCentral()
     signAllPublications()
-    coordinates("io.github.deference3", "koasty", "0.0.1")
+    coordinates("io.github.deference3", "koasty", "0.1.0")
     pom {
         name = "Koasty"
         description = "A Compose Multiplatform library for showing toasts."
