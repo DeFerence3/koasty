@@ -131,4 +131,24 @@ class KoastEntriesTest {
         assertFalse(after.exiting)
         assertEquals("Uploading 80%", after.koast.title)
     }
+
+    @Test
+    fun sync_koastMovingLanes_exitsOldLaneEntersNew() {
+        val config = KoastyHostConfig(position = KoastPosition.TOP_CENTER)
+        val manager = KoastManager()
+        val top = KoastEntries()
+        val bottom = KoastEntries()
+        manager.show("Copying", key = "copy")
+        top.sync(manager.queue.inLane(KoastPosition.TOP_CENTER, config))
+        bottom.sync(manager.queue.inLane(KoastPosition.BOTTOM_CENTER, config))
+
+        manager.showToast("Copied", key = "copy")
+        val topDrawn = top.sync(manager.queue.inLane(KoastPosition.TOP_CENTER, config))
+        val bottomDrawn = bottom.sync(manager.queue.inLane(KoastPosition.BOTTOM_CENTER, config))
+
+        assertEquals(listOf("Copying"), topDrawn.titles())
+        assertTrue(topDrawn.single().exiting)
+        assertEquals(listOf("Copied"), bottomDrawn.titles())
+        assertFalse(bottomDrawn.single().exiting)
+    }
 }

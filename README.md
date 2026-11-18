@@ -23,6 +23,7 @@ Full documentation lives in [`docs/`](docs/index.mdx).
 - Custom colors, typography, shape, padding, elevation, and animation specs.
 - Keyed koasts that update in place, for progress and status messages.
 - A slot for a completely custom notification layout.
+- Per-koast styles: success, error, warning, info and toast presets, or your own.
 - Direct alert positioning with compact bottom-right defaults on desktop and web.
 - No platform UI code required at the call site.
 
@@ -134,6 +135,8 @@ koastManager.queue            // pending koasts, front first
 
 Every `show*` method returns the koast's id. A persistent or until-dismissed koast keeps everything behind it waiting until you dismiss it.
 
+The queue has one lane per position. A koast whose [style](#per-koast-styles) puts it somewhere else, such as a bottom toast, waits only for koasts at that same position. `dismiss()` removes the oldest koast overall.
+
 ### Updating a koast with a key
 
 Pass a `key` to update a koast instead of queueing another one. If a koast with the same key is still showing or waiting, the new one replaces it in place: same queue position, same id, new content, and its duration starts over. Once the keyed koast is gone, the next call with that key queues a fresh one.
@@ -177,7 +180,7 @@ While the stack is expanded:
 - every card can be swiped sideways or clicked, which dismisses that specific koast;
 - vertical drags scroll the list.
 
-The stack collapses by itself once only one koast is left. Pass `expandable = false` to `KoastDisplayMode.Stacked` to hide the handle, and `expandedSpacing` to change the gap between cards in the list.
+The stack collapses by itself once only one koast is left. A koast styled with `stackable = false`, such as `KoastStyle.Toast`, is never stacked: while it is queued, its position shows one koast at a time. Pass `expandable = false` to `KoastDisplayMode.Stacked` to hide the handle, and `expandedSpacing` to change the gap between cards in the list.
 
 Provide `stackHandle` to draw your own handle. Koasty makes it clickable for you; call `state.toggle()` if your handle has its own button:
 
@@ -232,6 +235,37 @@ KoastyProvider(
     AppContent()
 }
 ```
+
+## Per-koast styles
+
+Pass a `KoastStyle` to any `show*` method to override the host config for that koast alone. Every property is optional; `null` keeps the host value.
+
+```kotlin
+koastManager.showSuccess("Saved")                           // green
+koastManager.showError("Upload failed", "Try again later")  // red
+koastManager.showWarning("Low storage")                     // amber
+koastManager.showInfo("New version available")              // blue
+koastManager.showToast("Copied to clipboard")               // pill at the bottom center, no swipe
+
+koastManager.show("Saved", style = KoastStyle.Success.copy(shape = RoundedCornerShape(24.dp)))
+```
+
+A style can also set the position, size, padding around the card, gestures and the content itself. Give your own style a call site with an extension function, the same way the built-in shortcuts work:
+
+```kotlin
+private val PromoStyle = KoastStyle(
+    position = KoastPosition.TOP_END,
+    compact = true,
+    containerColor = Color(0xFF6A1B9A),
+    contentColor = Color.White,
+    shape = RoundedCornerShape(topStart = 24.dp, bottomEnd = 24.dp),
+    outerPadding = PaddingValues(16.dp),
+)
+
+fun KoastManager.showPromo(title: String) = show(title, duration = 5.seconds, style = PromoStyle)
+```
+
+Each position is its own lane, so a toast at the bottom shows right away even while a persistent banner is up at the top. A keyed koast takes the style of its latest call, so `showInfo("Uploading…", key = "upload")` followed by `showSuccess("Uploaded", key = "upload")` turns the same koast green. See [per-koast styles](docs/per-koast-styles.mdx) for every property.
 
 ## Run the sample applications
 

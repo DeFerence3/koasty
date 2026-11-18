@@ -1,0 +1,112 @@
+---
+title: "Per-koast styles"
+description: "Give a single koast its own colors, shape, position, gestures or content with KoastStyle."
+---
+
+`KoastyHostConfig` sets how every koast looks. A `KoastStyle` overrides it for one koast. Pass it to any `show*` method:
+
+```kotlin
+koastManager.show(
+    title = "Saved",
+    message = "Your changes were stored.",
+    style = KoastStyle.Success
+)
+```
+
+Every `KoastStyle` property is optional. `null` means "use the host config", so a style only sets what it changes. The built-in status presets set only colors, so they keep the host's shape, size and position.
+
+## Presets
+
+| Preset | Look |
+| --- | --- |
+| `KoastStyle.Success` | Green, for an action that succeeded. |
+| `KoastStyle.Error` | Red, for an action that failed. |
+| `KoastStyle.Warning` | Amber with dark text, for something that needs attention. |
+| `KoastStyle.Info` | Blue, for neutral information. |
+| `KoastStyle.Toast` | A small dark pill at the bottom center, 64 dp above the edge. Shows the title only, can't be swiped and is never stacked. |
+
+Each preset has a shortcut:
+
+```kotlin
+koastManager.showSuccess("Saved")
+koastManager.showError("Upload failed", "Check your connection and try again.")
+koastManager.showWarning("Low storage")
+koastManager.showInfo("New version available")
+koastManager.showToast("Copied to clipboard")   // not dismissible, times out on its own
+```
+
+Derive your own variant with `copy`:
+
+```kotlin
+val RoundedSuccess = KoastStyle.Success.copy(shape = RoundedCornerShape(24.dp))
+```
+
+## Properties
+
+| Property | Description |
+| --- | --- |
+| `position` | Where this koast appears. See [lanes](#lanes). |
+| `compact`, `maxWidth`, `minHeight` | Size, as in the host config. |
+| `containerColor`, `contentColor` | Background and text colors. |
+| `shape`, `shadowElevation` | Shape and shadow depth. |
+| `contentPadding` | Padding inside the koast. |
+| `outerPadding` | Space around the koast, inside its lane. Use it to lift a koast off the screen edge. |
+| `titleStyle`, `messageStyle` | Text styles, merged over the Material typography. |
+| `horizontalSwipeEnabled`, `swipeUpEnabled` | Swipe gestures for this koast. |
+| `stackable` | `false` keeps this koast out of stacks. See [lanes](#lanes). |
+| `content` | Draws the inside of the koast, replacing the provider's `koastContent` and `DefaultKoastContent`. |
+
+Swipe thresholds and animation specs stay host-wide.
+
+## Lanes
+
+Koasts are grouped by position, and each position has its own first-in, first-out lane. A koast with no `position` goes to the host config's position.
+
+Each lane has its own front koast and its own countdown, so lanes never wait on each other. A toast at the bottom shows right away, even while a persistent banner is up at the top:
+
+```kotlin
+koastManager.showPersistent("You're offline", style = KoastStyle.Warning)
+koastManager.showToast("Draft saved")   // shows now, at the bottom center
+```
+
+A [stacked display mode](/display-modes) stacks each lane separately. While a lane holds a koast whose style sets `stackable = false`, as `KoastStyle.Toast` does, that lane switches to `Sequential`: one koast at a time, with no peek, scale or expand handle. Queued toasts show one after another, like platform toasts.
+
+## Your own koast
+
+Bundle everything into a style once, then give it a call site of its own with an extension function. This is how the built-in `showSuccess` and `showToast` work:
+
+```kotlin
+private val PromoStyle = KoastStyle(
+    position = KoastPosition.TOP_END,
+    compact = true,
+    maxWidth = 320.dp,
+    containerColor = Color(0xFF6A1B9A),
+    contentColor = Color.White,
+    shape = RoundedCornerShape(topStart = 24.dp, bottomEnd = 24.dp),
+    outerPadding = PaddingValues(16.dp),
+    content = { koast ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Star, contentDescription = null)
+            Spacer(Modifier.width(12.dp))
+            Text(koast.title, fontWeight = FontWeight.Bold)
+        }
+    }
+)
+
+fun KoastManager.showPromo(title: String) =
+    show(title, duration = 5.seconds, style = PromoStyle)
+
+koastManager.showPromo("Double points this weekend")
+```
+
+## Changing style with a key
+
+A keyed koast takes its style from the latest call, so a status message can change color in place:
+
+```kotlin
+koastManager.showUntilDismissed("Uploading…", key = "upload", style = KoastStyle.Info)
+// later
+koastManager.showSuccess("Uploaded", key = "upload")
+```
+
+If the new style moves the koast to another position, it leaves its old lane and enters the new one.

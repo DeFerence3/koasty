@@ -3,8 +3,6 @@ package com.deference.koasty
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
@@ -23,13 +21,7 @@ fun KoastyProvider(
         content()
         KoastyHost(
             koastManager = koastManager,
-            modifier = Modifier
-                .align(config.position.toAlignment())
-                .padding(config.edgePadding)
-                .then(
-                    if (config.respectSafeArea) Modifier.safeDrawingPadding()
-                    else Modifier
-                ),
+            modifier = Modifier.matchParentSize(),
             config = config,
             koastContent = koastContent,
             stackHandle = stackHandle

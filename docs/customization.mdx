@@ -5,7 +5,7 @@ description: "Adapt position, size, colors, gestures and layout with KoastyHostC
 
 ## Host config
 
-Pass a `KoastyHostConfig` to `KoastyProvider`:
+Pass a `KoastyHostConfig` to `KoastyProvider`. It applies to every koast; to style a single koast, see [per-koast styles](/per-koast-styles).
 
 ```kotlin
 KoastyProvider(
@@ -101,4 +101,6 @@ KoastyProvider(
 }
 ```
 
-`KoastRequest` gives you the koast's `id`, `title`, `message`, `lifetime`, `key` and click settings.
+`KoastRequest` gives you the koast's `id`, `title`, `message`, `lifetime`, `key`, `style` and click settings.
+
+A koast whose [`KoastStyle`](/per-koast-styles) sets `content` uses that instead of `koastContent`.

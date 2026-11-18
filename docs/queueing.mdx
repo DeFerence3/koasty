@@ -19,12 +19,16 @@ koastManager.isShowing        // whether anything is queued
 
 How the waiting koasts are drawn depends on the [display mode](/display-modes).
 
+### One lane per position
+
+The queue is split by position: every koast goes to its [style's](/per-koast-styles) `position`, or to the host config's position if it has none. Each position is its own first-in, first-out lane with its own front koast, so a toast at the bottom doesn't wait for a banner at the top. `dismiss()` removes the oldest koast overall, which is the front of its lane.
+
 ## Updating a koast with a key
 
 Pass a `key` to update a koast instead of queueing another one. If a koast with the same key is still showing or waiting, the new one replaces it in place:
 
 - it keeps the same queue position and the same id;
-- its title, message, lifetime and click behavior come from the new call;
+- its title, message, lifetime, style and click behavior come from the new call;
 - its duration starts over.
 
 ```kotlin

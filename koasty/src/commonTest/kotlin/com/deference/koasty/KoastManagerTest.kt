@@ -95,4 +95,53 @@ class KoastManagerTest {
         assertTrue(second > first)
         assertEquals(second, manager.currentKoast?.id)
     }
+
+    @Test
+    fun show_storesStyle() {
+        val manager = KoastManager()
+        val style = KoastStyle(position = KoastPosition.BOTTOM_END)
+
+        manager.show("Styled", style = style)
+        manager.show("Plain")
+
+        assertEquals(style, manager.queue[0].style)
+        assertNull(manager.queue[1].style)
+    }
+
+    @Test
+    fun showClickable_storesStyle() {
+        val manager = KoastManager()
+
+        manager.showClickable("Clickable", style = KoastStyle.Info) {}
+        manager.showPersistent("Persistent", style = KoastStyle.Warning)
+
+        assertEquals(listOf(KoastStyle.Info, KoastStyle.Warning), manager.queue.map { it.style })
+    }
+
+    @Test
+    fun showSuccess_usesSuccessPreset() {
+        val manager = KoastManager()
+
+        manager.showSuccess("Saved")
+        manager.showError("Failed")
+        manager.showToast("Copied")
+
+        assertEquals(
+            listOf(KoastStyle.Success, KoastStyle.Error, KoastStyle.Toast),
+            manager.queue.map { it.style }
+        )
+        assertFalse(manager.queue.last().dismissible)
+    }
+
+    @Test
+    fun show_sameKeyReplacesStyle() {
+        val manager = KoastManager()
+        val id = manager.showInfo("Uploading", key = "upload")
+
+        val sameId = manager.showSuccess("Uploaded", key = "upload")
+
+        assertEquals(id, sameId)
+        assertEquals(KoastStyle.Success, manager.currentKoast?.style)
+        assertEquals(1, manager.queue.size)
+    }
 }

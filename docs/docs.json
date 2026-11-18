@@ -16,7 +16,7 @@
       },
       {
         "group": "Customization",
-        "pages": ["customization"]
+        "pages": ["customization", "per-koast-styles"]
       },
       {
         "group": "Project",

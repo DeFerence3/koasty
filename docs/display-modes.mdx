@@ -78,3 +78,7 @@ KoastyProvider(
 ```
 
 `KoastStackHandleState` gives you `moreCount` (koasts behind the front one), `expanded`, and `toggle()`.
+
+## Koasts that never stack
+
+A koast whose [style](/per-koast-styles) sets `stackable = false` is never drawn in a stack. While one is queued, its lane uses `Sequential` regardless of the host's display mode, so it gets no peek offset, scaling or expand handle. The `KoastStyle.Toast` preset does this.
