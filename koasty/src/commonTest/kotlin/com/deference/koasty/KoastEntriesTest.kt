@@ -1,0 +1,119 @@
+package com.deference.koasty
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+
+class KoastEntriesTest {
+
+    private fun List<KoastEntry>.titles() = map { it.koast.title }
+
+    @Test
+    fun sync_addsQueuedKoastsInQueueOrder() {
+        val manager = KoastManager()
+        val entries = KoastEntries()
+        manager.show("First")
+        manager.show("Second")
+
+        val drawn = entries.sync(manager.queue)
+
+        assertEquals(listOf("First", "Second"), drawn.titles())
+        assertTrue(drawn.none { it.exiting })
+    }
+
+    @Test
+    fun sync_keepsDismissedKoastAsExiting() {
+        val manager = KoastManager()
+        val entries = KoastEntries()
+        manager.show("Only")
+        entries.sync(manager.queue)
+
+        manager.dismiss()
+        val drawn = entries.sync(manager.queue)
+
+        assertEquals(listOf("Only"), drawn.titles())
+        assertTrue(drawn.single().exiting)
+    }
+
+    @Test
+    fun sync_exitingKoastRemembersItsStackPosition() {
+        val manager = KoastManager()
+        val entries = KoastEntries()
+        manager.show("First")
+        val secondId = manager.show("Second")
+        manager.show("Third")
+        entries.sync(manager.queue)
+
+        manager.dismiss(secondId)
+        val drawn = entries.sync(manager.queue)
+
+        val second = drawn.single { it.koast.id == secondId }
+        assertTrue(second.exiting)
+        assertEquals(1, second.exitIndex)
+        assertEquals(1, drawn.single { it.koast.title == "Third" }.activeIndex)
+    }
+
+    @Test
+    fun sync_dismissAllMarksEveryKoastExitingWithDistinctPositions() {
+        val manager = KoastManager()
+        val entries = KoastEntries()
+        repeat(3) { manager.show("Koast $it") }
+        entries.sync(manager.queue)
+
+        manager.dismissAll()
+        val drawn = entries.sync(manager.queue)
+
+        assertTrue(drawn.all { it.exiting })
+        assertEquals(listOf(0, 1, 2), drawn.map { it.exitIndex })
+    }
+
+    @Test
+    fun sync_isIdempotentForTheSameQueue() {
+        val manager = KoastManager()
+        val entries = KoastEntries()
+        manager.show("First")
+        manager.show("Second")
+        entries.sync(manager.queue)
+        manager.dismiss()
+
+        val once = entries.sync(manager.queue)
+        val twice = entries.sync(manager.queue)
+
+        assertEquals(once, twice)
+        assertEquals(0, twice.first().exitIndex)
+        assertEquals(0, twice.last().activeIndex)
+    }
+
+    @Test
+    fun remove_dropsExitedKoast() {
+        val manager = KoastManager()
+        val entries = KoastEntries()
+        manager.show("Only")
+        entries.sync(manager.queue)
+        manager.dismiss()
+        val exiting = entries.sync(manager.queue).single()
+
+        entries.remove(exiting)
+
+        assertTrue(entries.sync(manager.queue).isEmpty())
+    }
+
+    @Test
+    fun sync_newKoastJoinsWhileOldOneIsStillExiting() {
+        val manager = KoastManager()
+        val entries = KoastEntries()
+        manager.show("Old")
+        entries.sync(manager.queue)
+        manager.dismiss()
+        entries.sync(manager.queue)
+
+        manager.show("New")
+        val drawn = entries.sync(manager.queue)
+
+        assertEquals(listOf("Old", "New"), drawn.titles())
+        assertTrue(drawn[0].exiting)
+        assertFalse(drawn[1].exiting)
+        assertEquals(0, drawn[1].activeIndex)
+    }
+}

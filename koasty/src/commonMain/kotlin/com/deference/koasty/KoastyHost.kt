@@ -109,7 +109,14 @@ fun KoastyHost(
         if ((queueSize <= 1 || !canExpand) && expanded) setExpanded(false)
     }
 
-    val koasts = managerState.queue.map { KoastEntry(it) }.toMutableStateList()
+    /*
+     * Queued koasts plus the ones still animating out. `exitedCount` is
+     * bumped when a card finishes leaving, so the host recomposes and
+     * stops drawing it.
+     */
+    val koastEntries = remember { KoastEntries() }
+    var exitedCount by remember { mutableIntStateOf(0) }
+    val koasts = exitedCount.let { koastEntries.sync(managerState.queue) }
     if (koasts.isEmpty()) return
 
     var frontHeightPx by remember { mutableIntStateOf(0) }
@@ -231,7 +238,10 @@ fun KoastyHost(
                         frontSwipeProgress = frontSwipeProgress,
                         onSwipeProgress = { swipe.report(entry.koast.id, it) },
                         onFrontHeightChanged = { frontHeightPx = it },
-                        onExited = { koasts.remove(entry) },
+                        onExited = {
+                            koastEntries.remove(entry)
+                            exitedCount++
+                        },
                         koastManager = koastManager,
                         config = config,
                         koastContent = koastContent,
@@ -1052,18 +1062,6 @@ fun DefaultKoastContent(
  * so writing it during composition triggers nothing.
  */
 private class LastVisualIndex(var value: Float)
-
-/**
- * A koast the host is drawing. It stays drawn while it animates out,
- * after the manager has already removed it from the queue.
- */
-@Stable
-private class KoastEntry(val koast: KoastRequest) {
-    var exiting by mutableStateOf(false)
-
-    // Stack position the koast had when it started leaving.
-    var exitIndex by mutableIntStateOf(0)
-}
 
 /*
  * How far the front koast has been swiped away: 0 = resting, 1 = fully gone.
